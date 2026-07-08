@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.4
+// @version      0.1.5
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.4
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.4
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.5
 // @grant        none
 // ==/UserScript==
 
@@ -17,7 +17,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.1.4',
+    version: '0.1.5',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -266,7 +266,7 @@
 
       <section class="ftp-card">
         <h2>Status</h2>
-        <p><span class="ftp-status">Online</span> - window position is saved after dragging.</p>
+        <p><span class="ftp-status">Online</span> - window position is saved while dragging.</p>
       </section>
     `;
   }
@@ -279,13 +279,16 @@
       return;
     }
 
-    root.appendChild(windowShell.createWindow({
+    const appWindow = windowShell.createWindow({
       title: config.appName,
       shortTitle: config.shortName || 'FTP',
       version: config.version,
       bodyHtml: getDashboardHtml(),
       storagePrefix: config.storagePrefix
-    }));
+    });
+
+    root.appendChild(appWindow);
+    windowShell.restorePosition(root, config.storagePrefix);
   }
 
   function start() {
