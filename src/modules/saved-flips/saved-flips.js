@@ -114,10 +114,25 @@ const FlipTrackerProSavedFlips = (() => {
     `;
   }
 
-  function bind(root, { onDelete, onEdit, onFilterChange, storagePrefix, store } = {}) {
+  function bind(root, options = {}) {
+    const { onDelete, onEdit, onFilterChange, storagePrefix, store } = options;
     const searchInput = root.querySelector('[data-saved-search]');
     const profitFilter = root.querySelector('[data-saved-profit-filter]');
     const sortSelect = root.querySelector('[data-saved-sort]');
+
+    const rerenderSavedFlips = () => {
+      const section = root.querySelector('[data-saved-flips-section]');
+      const flips = store && typeof store.read === 'function'
+        ? store.read(storagePrefix)
+        : [];
+
+      if (!section) {
+        return;
+      }
+
+      section.outerHTML = render({ flips });
+      bind(root, options);
+    };
 
     const updateFilters = () => {
       activeFilters = {
@@ -128,7 +143,10 @@ const FlipTrackerProSavedFlips = (() => {
 
       if (typeof onFilterChange === 'function') {
         onFilterChange();
+        return;
       }
+
+      rerenderSavedFlips();
     };
 
     if (searchInput) {
