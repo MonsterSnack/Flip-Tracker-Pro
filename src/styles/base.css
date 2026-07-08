@@ -246,6 +246,11 @@
   justify-items: end;
 }
 
+.ftp-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
 [data-profit-state="positive"] {
   color: var(--ftp-success);
 }
@@ -270,6 +275,12 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.ftp-form-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .ftp-field {
@@ -320,6 +331,7 @@
 }
 
 .ftp-primary-button,
+.ftp-secondary-button,
 .ftp-danger-button {
   border: 0;
   border-radius: 6px;
@@ -337,6 +349,15 @@
 
 .ftp-primary-button:hover {
   background: var(--ftp-accent-strong);
+}
+
+.ftp-secondary-button {
+  background: var(--ftp-border);
+  color: var(--ftp-text);
+}
+
+.ftp-secondary-button:hover {
+  background: #3d4657;
 }
 
 .ftp-danger-button {
