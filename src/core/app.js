@@ -1,17 +1,17 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.2.0
+// @version      0.2.1
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.2.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.2.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.2.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.2.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.2.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.2.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.2.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.2.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.2.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.2.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.2.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.2.1
 // @grant        none
 // ==/UserScript==
 
@@ -21,7 +21,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.2.0',
+    version: '0.2.1',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -92,10 +92,7 @@
       min-height: 0;
     }
 
-    #${config.rootId} .ftp-window[data-window-state="minimized"] .ftp-body {
-      display: none;
-    }
-
+    #${config.rootId} .ftp-window[data-window-state="minimized"] .ftp-body,
     #${config.rootId} .ftp-window[data-window-state="closed"] {
       display: none;
     }
@@ -117,8 +114,16 @@
       user-select: none;
     }
 
-    #${config.rootId} .ftp-title-group {
+    #${config.rootId} .ftp-title-group,
+    #${config.rootId} .ftp-saved-flip-main,
+    #${config.rootId} .ftp-saved-flip-side,
+    #${config.rootId} .ftp-form,
+    #${config.rootId} .ftp-field,
+    #${config.rootId} .ftp-profit-preview {
       display: grid;
+    }
+
+    #${config.rootId} .ftp-title-group {
       gap: 1px;
     }
 
@@ -149,9 +154,14 @@
       line-height: 1;
     }
 
-    #${config.rootId} .ftp-window-actions {
+    #${config.rootId} .ftp-window-actions,
+    #${config.rootId} .ftp-flip-row,
+    #${config.rootId} .ftp-row-actions {
       display: flex;
       align-items: center;
+    }
+
+    #${config.rootId} .ftp-window-actions {
       gap: 4px;
     }
 
@@ -202,20 +212,33 @@
       line-height: 1.5;
     }
 
-    #${config.rootId} .ftp-stats {
+    #${config.rootId} .ftp-stats,
+    #${config.rootId} .ftp-form-grid,
+    #${config.rootId} .ftp-form-actions {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+    }
+
+    #${config.rootId} [data-saved-flips-controls] {
+      margin-top: 10px;
     }
 
     #${config.rootId} .ftp-stat {
       background: #181b22;
     }
 
-    #${config.rootId} .ftp-stat span {
-      display: block;
+    #${config.rootId} .ftp-stat span,
+    #${config.rootId} .ftp-field span,
+    #${config.rootId} .ftp-profit-preview span,
+    #${config.rootId} .ftp-profit-preview small,
+    #${config.rootId} .ftp-saved-flip-main span {
       color: #9aa3b2;
       font-size: 11px;
+    }
+
+    #${config.rootId} .ftp-field span {
+      font-weight: 700;
     }
 
     #${config.rootId} .ftp-stat strong {
@@ -243,8 +266,6 @@
     }
 
     #${config.rootId} .ftp-flip-row {
-      display: flex;
-      align-items: center;
       justify-content: space-between;
       gap: 10px;
     }
@@ -256,14 +277,11 @@
     }
 
     #${config.rootId} .ftp-saved-flip-main,
-    #${config.rootId} .ftp-saved-flip-side {
-      display: grid;
-      gap: 4px;
-    }
-
-    #${config.rootId} .ftp-saved-flip-main span {
-      color: #9aa3b2;
-      font-size: 11px;
+    #${config.rootId} .ftp-saved-flip-side,
+    #${config.rootId} .ftp-form,
+    #${config.rootId} .ftp-field,
+    #${config.rootId} .ftp-profit-preview {
+      gap: 5px;
     }
 
     #${config.rootId} .ftp-saved-flip-side {
@@ -271,7 +289,6 @@
     }
 
     #${config.rootId} .ftp-row-actions {
-      display: flex;
       gap: 6px;
     }
 
@@ -284,32 +301,12 @@
     }
 
     #${config.rootId} .ftp-form {
-      display: grid;
       gap: 10px;
       margin-top: 10px;
     }
 
-    #${config.rootId} .ftp-form-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-
     #${config.rootId} .ftp-form-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-    }
-
-    #${config.rootId} .ftp-field {
-      display: grid;
-      gap: 5px;
-    }
-
-    #${config.rootId} .ftp-field span {
-      color: #9aa3b2;
-      font-size: 11px;
-      font-weight: 700;
     }
 
     #${config.rootId} .ftp-input {
@@ -330,18 +327,10 @@
     }
 
     #${config.rootId} .ftp-profit-preview {
-      display: grid;
-      gap: 3px;
       border: 1px solid #313744;
       border-radius: 8px;
       background: #181b22;
       padding: 10px;
-    }
-
-    #${config.rootId} .ftp-profit-preview span,
-    #${config.rootId} .ftp-profit-preview small {
-      color: #9aa3b2;
-      font-size: 11px;
     }
 
     #${config.rootId} .ftp-profit-preview strong {
