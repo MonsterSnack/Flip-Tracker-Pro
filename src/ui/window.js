@@ -17,7 +17,6 @@ const FlipTrackerProWindow = (() => {
 
   function setDisplayMode(windowElement, nextMode, labels) {
     const titleButton = windowElement.querySelector('[data-action="toggle-display"]');
-    windowElement.dataset-displayMode = nextMode;
     windowElement.dataset.displayMode = nextMode;
     titleButton.textContent = nextMode === 'compact' ? labels.shortTitle : labels.title;
     titleButton.setAttribute('aria-label', nextMode === 'compact' ? `Expand ${labels.title}` : `Collapse ${labels.title}`);
