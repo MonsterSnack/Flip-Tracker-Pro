@@ -31,7 +31,8 @@ const FlipTrackerProStorageService = (() => {
     return Number.isFinite(numberValue) ? numberValue : fallback;
   }
 
-  function normalizeSale(sale) {
+  function normalizeSale(rawSale) {
+    const sale = rawSale && typeof rawSale === 'object' ? rawSale : {};
     const quantity = Math.max(1, toNumber(sale.quantity, 1));
     const buyPrice = toNumber(sale.buyPrice, toNumber(sale.unitCost));
     const sellPrice = toNumber(sale.sellPrice);
@@ -60,7 +61,8 @@ const FlipTrackerProStorageService = (() => {
     };
   }
 
-  function normalizePurchaseLot(lot) {
+  function normalizePurchaseLot(rawLot) {
+    const lot = rawLot && typeof rawLot === 'object' ? rawLot : {};
     const quantity = Math.max(1, toNumber(lot.quantity, 1));
     const unitCost = toNumber(lot.unitCost, toNumber(lot.buyPrice));
     const totalCost = toNumber(lot.totalCost, unitCost * quantity);
