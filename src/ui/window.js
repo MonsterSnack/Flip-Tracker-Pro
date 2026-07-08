@@ -109,13 +109,13 @@ const FlipTrackerProWindow = (() => {
 
     titleButton.addEventListener('click', () => {
       const isCompact = windowElement.dataset.displayMode === 'compact';
+      setWindowState(windowElement, 'open');
       setDisplayMode(windowElement, isCompact ? 'expanded' : 'compact', labels);
     });
 
     minimizeButton.addEventListener('click', () => {
-      const isMinimized = windowElement.dataset.windowState === 'minimized';
-      setWindowState(windowElement, isMinimized ? 'open' : 'minimized');
-      minimizeButton.textContent = isMinimized ? '_' : '+';
+      setWindowState(windowElement, 'open');
+      setDisplayMode(windowElement, 'compact', labels);
     });
 
     closeButton.addEventListener('click', () => {
