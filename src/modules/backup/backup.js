@@ -1,4 +1,10 @@
 const FlipTrackerProBackup = (() => {
+  function escapeHtml(value) {
+    return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
+      ? window.FlipTrackerProHtml.escapeHtml(value)
+      : String(value ?? '');
+  }
+
   function getBackupFileName() {
     const date = new Date().toISOString().slice(0, 10);
     return `flip-tracker-pro-backup-${date}.json`;
@@ -9,7 +15,7 @@ const FlipTrackerProBackup = (() => {
       return '';
     }
 
-    return `<p class="ftp-status" data-status="${status}">${message}</p>`;
+    return `<p class="ftp-status" data-status="${escapeHtml(status)}">${escapeHtml(message)}</p>`;
   }
 
   function getStorageService() {
@@ -33,7 +39,7 @@ const FlipTrackerProBackup = (() => {
     `;
   }
 
-  function bind(root, { eventBus, onImport, storagePrefix, store } = {}) {
+  function bind(root, { eventBus, onImport, storagePrefix } = {}) {
     const section = root.querySelector('[data-backup-section]');
     const exportButton = root.querySelector('[data-export-backup]');
     const importButton = root.querySelector('[data-import-backup]');
@@ -64,15 +70,12 @@ const FlipTrackerProBackup = (() => {
 
     if (exportButton) {
       exportButton.addEventListener('click', () => {
-        const backupJson = storageService && typeof storageService.exportJson === 'function'
-          ? storageService.exportJson(storagePrefix)
-          : JSON.stringify({
-            app: 'Flip Tracker Pro',
-            exportedAt: new Date().toISOString(),
-            flips: store && typeof store.read === 'function' ? store.read(storagePrefix) : [],
-            openPurchases: store && typeof store.readOpenPurchases === 'function' ? store.readOpenPurchases(storagePrefix) : []
-          }, null, 2);
-        const blob = new Blob([backupJson], { type: 'application/json' });
+        if (!storageService || typeof storageService.exportJson !== 'function') {
+          setStatus('error', 'Storage service is unavailable.');
+          return;
+        }
+
+        const blob = new Blob([storageService.exportJson(storagePrefix)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
 
