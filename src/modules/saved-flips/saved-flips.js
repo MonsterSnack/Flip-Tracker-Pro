@@ -7,6 +7,12 @@ const FlipTrackerProSavedFlips = (() => {
 
   let activeFilters = { ...defaultFilters };
 
+  function escapeHtml(value) {
+    return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
+      ? window.FlipTrackerProHtml.escapeHtml(value)
+      : String(value ?? '');
+  }
+
   function formatMoney(value) {
     return new Intl.NumberFormat('en-US', {
       maximumFractionDigits: 0,
@@ -15,19 +21,19 @@ const FlipTrackerProSavedFlips = (() => {
     }).format(value || 0);
   }
 
-  function getCreatedTime(flip) {
-    const timestamp = Date.parse(flip.createdAt || flip.updatedAt || '');
+  function getCreatedTime(sale) {
+    const timestamp = Date.parse(sale.createdAt || sale.updatedAt || '');
     return Number.isNaN(timestamp) ? 0 : timestamp;
   }
 
-  function getFilteredFlips(flips) {
+  function getFilteredSales(sales) {
     const query = activeFilters.query.trim().toLowerCase();
 
-    return flips
-      .filter((flip) => {
-        const itemName = String(flip.itemName || '').toLowerCase();
-        const notes = String(flip.notes || '').toLowerCase();
-        const profit = Number(flip.profit) || 0;
+    return sales
+      .filter((sale) => {
+        const itemName = String(sale.itemName || '').toLowerCase();
+        const notes = String(sale.notes || '').toLowerCase();
+        const profit = Number(sale.profit) || 0;
         const matchesQuery = !query || itemName.includes(query) || notes.includes(query);
         const matchesProfit = activeFilters.profit === 'all'
           || (activeFilters.profit === 'profit' && profit >= 0)
@@ -53,7 +59,7 @@ const FlipTrackerProSavedFlips = (() => {
       <div class="ftp-form-grid" data-saved-flips-controls>
         <label class="ftp-field">
           <span>Search</span>
-          <input class="ftp-input" type="search" value="${activeFilters.query}" placeholder="Item or note" data-saved-search>
+          <input class="ftp-input" type="search" value="${escapeHtml(activeFilters.query)}" placeholder="Item or note" data-saved-search>
         </label>
 
         <label class="ftp-field">
@@ -77,50 +83,53 @@ const FlipTrackerProSavedFlips = (() => {
     `;
   }
 
-  function renderFlip(flip) {
-    const profitState = flip.profit >= 0 ? 'positive' : 'negative';
+  function renderSale(sale) {
+    const profitState = sale.profit >= 0 ? 'positive' : 'negative';
+    const saleId = escapeHtml(sale.id);
+    const itemName = escapeHtml(sale.itemName || 'Unnamed item');
+    const notes = escapeHtml(sale.notes || '');
 
     return `
-      <li class="ftp-saved-flip" data-flip-id="${flip.id}">
+      <li class="ftp-saved-flip" data-flip-id="${saleId}">
         <div class="ftp-saved-flip-main">
-          <strong>${flip.itemName || 'Unnamed item'}</strong>
-          <span>Buy ${formatMoney(flip.buyPrice)} / Sell ${formatMoney(flip.sellPrice)} / Qty ${flip.quantity || 1}</span>
-          <span>Fees ${formatMoney(flip.fees)} / Margin ${(Number(flip.margin) || 0).toFixed(1)}%</span>
-          ${flip.notes ? `<span>Note: ${flip.notes}</span>` : ''}
+          <strong>${itemName}</strong>
+          <span>Buy ${formatMoney(sale.buyPrice)} / Sell ${formatMoney(sale.sellPrice)} / Qty ${sale.quantity || 1}</span>
+          <span>Fees ${formatMoney(sale.fees)} / Margin ${(Number(sale.margin) || 0).toFixed(1)}%</span>
+          ${notes ? `<span>Note: ${notes}</span>` : ''}
         </div>
 
         <div class="ftp-saved-flip-side">
-          <strong data-profit-state="${profitState}">${formatMoney(flip.profit)}</strong>
+          <strong data-profit-state="${profitState}">${formatMoney(sale.profit)}</strong>
           <div class="ftp-row-actions">
-            <button class="ftp-secondary-button" type="button" data-edit-flip="${flip.id}">Edit</button>
-            <button class="ftp-danger-button" type="button" data-delete-flip="${flip.id}">Delete</button>
+            <button class="ftp-secondary-button" type="button" data-edit-flip="${saleId}">Edit</button>
+            <button class="ftp-danger-button" type="button" data-delete-flip="${saleId}">Delete</button>
           </div>
         </div>
       </li>
     `;
   }
 
-  function renderResults(flips) {
-    const filteredFlips = getFilteredFlips(flips);
+  function renderResults(sales) {
+    const filteredSales = getFilteredSales(sales);
 
-    if (flips.length === 0) {
+    if (sales.length === 0) {
       return '<p>No saved flips yet.</p>';
     }
 
-    if (filteredFlips.length === 0) {
+    if (filteredSales.length === 0) {
       return '<p>No flips match your search.</p>';
     }
 
-    return `<ul class="ftp-saved-flips">${filteredFlips.map(renderFlip).join('')}</ul>`;
+    return `<ul class="ftp-saved-flips">${filteredSales.map(renderSale).join('')}</ul>`;
   }
 
-  function render({ flips = [] } = {}) {
+  function render({ flips = [], sales = flips } = {}) {
     return `
       <section class="ftp-card" data-saved-flips-section>
         <h2>Saved Flips</h2>
-        ${flips.length > 0 ? renderControls() : ''}
+        ${sales.length > 0 ? renderControls() : ''}
         <div data-saved-flips-results>
-          ${renderResults(flips)}
+          ${renderResults(sales)}
         </div>
       </section>
     `;
@@ -133,38 +142,38 @@ const FlipTrackerProSavedFlips = (() => {
     const sortSelect = root.querySelector('[data-saved-sort]');
     const results = root.querySelector('[data-saved-flips-results]');
 
-    const getFlips = () => store && typeof store.read === 'function'
+    const getSales = () => store && typeof store.read === 'function'
       ? store.read(storagePrefix)
       : [];
 
     const bindResultActions = () => {
       root.querySelectorAll('[data-edit-flip]').forEach((button) => {
         button.addEventListener('click', () => {
-          const flipId = button.dataset.editFlip;
-          const flip = store && typeof store.find === 'function'
-            ? store.find(storagePrefix, flipId)
+          const saleId = button.dataset.editFlip;
+          const sale = store && typeof store.find === 'function'
+            ? store.find(storagePrefix, saleId)
             : null;
 
-          if (flip && typeof onEdit === 'function') {
-            onEdit(flip);
+          if (sale && typeof onEdit === 'function') {
+            onEdit(sale);
           }
         });
       });
 
       root.querySelectorAll('[data-delete-flip]').forEach((button) => {
         button.addEventListener('click', () => {
-          const flipId = button.dataset.deleteFlip;
-          const flip = store && typeof store.find === 'function'
-            ? store.find(storagePrefix, flipId)
+          const saleId = button.dataset.deleteFlip;
+          const sale = store && typeof store.find === 'function'
+            ? store.find(storagePrefix, saleId)
             : null;
-          const itemName = flip && flip.itemName ? flip.itemName : 'this saved flip';
+          const itemName = sale && sale.itemName ? sale.itemName : 'this saved flip';
 
           if (!window.confirm(`Delete ${itemName}? This cannot be undone.`)) {
             return;
           }
 
           if (store && typeof store.remove === 'function') {
-            store.remove(storagePrefix, flipId);
+            store.remove(storagePrefix, saleId);
           }
 
           if (typeof onDelete === 'function') {
@@ -182,7 +191,7 @@ const FlipTrackerProSavedFlips = (() => {
       };
 
       if (results) {
-        results.innerHTML = renderResults(getFlips());
+        results.innerHTML = renderResults(getSales());
         bindResultActions();
       }
     };
