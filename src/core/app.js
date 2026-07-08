@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.5
+// @version      0.1.6
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.5
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.6
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.6
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.6
 // @grant        none
 // ==/UserScript==
 
@@ -17,7 +18,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.1.5',
+    version: '0.1.6',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -28,6 +29,7 @@
 
   const config = window.FlipTrackerProConfig || fallbackConfig;
   const windowShell = window.FlipTrackerProWindow;
+  const dashboard = window.FlipTrackerProDashboard;
 
   const styles = `
     #${config.rootId} {
@@ -213,12 +215,6 @@
       margin-top: 4px;
       font-size: 18px;
     }
-
-    #${config.rootId} .ftp-status {
-      color: #3ecf8e;
-      font-size: 12px;
-      font-weight: 700;
-    }
   `;
 
   function injectStyles() {
@@ -247,26 +243,14 @@
   }
 
   function getDashboardHtml() {
+    if (dashboard && typeof dashboard.render === 'function') {
+      return dashboard.render();
+    }
+
     return `
       <section class="ftp-card">
-        <h2>Dashboard</h2>
-        <p>Your flip tracking workspace is mounted and ready for the next feature module.</p>
-      </section>
-
-      <section class="ftp-stats" aria-label="Trading summary">
-        <div class="ftp-stat">
-          <span>Total profit</span>
-          <strong>$0</strong>
-        </div>
-        <div class="ftp-stat">
-          <span>Active flips</span>
-          <strong>0</strong>
-        </div>
-      </section>
-
-      <section class="ftp-card">
-        <h2>Status</h2>
-        <p><span class="ftp-status">Online</span> - window position is saved while dragging.</p>
+        <h2>Dashboard unavailable</h2>
+        <p>The dashboard module did not load.</p>
       </section>
     `;
   }
