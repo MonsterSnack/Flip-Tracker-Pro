@@ -75,6 +75,11 @@ const FlipTrackerProFlipEntry = (() => {
             </label>
           </div>
 
+          <label class="ftp-field">
+            <span>Notes</span>
+            <input class="ftp-input" name="notes" type="text" placeholder="Optional notes" autocomplete="off">
+          </label>
+
           <div class="ftp-profit-preview" data-profit-preview>
             <span>Estimated profit</span>
             <strong>$0</strong>
@@ -130,6 +135,7 @@ const FlipTrackerProFlipEntry = (() => {
       form.elements.sellPrice.value = flip.sellPrice || 0;
       form.elements.quantity.value = flip.quantity || 1;
       form.elements.fees.value = flip.fees || 0;
+      form.elements.notes.value = flip.notes || '';
       title.textContent = 'Edit Flip';
       submitButton.textContent = 'Update flip';
       cancelEditButton.hidden = false;
@@ -149,7 +155,8 @@ const FlipTrackerProFlipEntry = (() => {
       const result = updatePreview();
       const flip = {
         ...result,
-        itemName: form.elements.itemName.value.trim()
+        itemName: form.elements.itemName.value.trim(),
+        notes: form.elements.notes.value.trim()
       };
       const flipId = form.elements.flipId.value;
 
