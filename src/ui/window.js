@@ -1,5 +1,7 @@
 const FlipTrackerProWindow = (() => {
   const viewportPadding = 8;
+  const minWidth = 320;
+  const minHeight = 360;
 
   function createElementFromHtml(html) {
     const template = document.createElement('template');
@@ -12,42 +14,82 @@ const FlipTrackerProWindow = (() => {
   }
 
   function getStorageKey(storagePrefix) {
+    return `${storagePrefix || 'flipTrackerPro'}:windowState`;
+  }
+
+  function getLegacyPositionKey(storagePrefix) {
     return `${storagePrefix || 'flipTrackerPro'}:windowPosition`;
   }
 
-  function readSavedPosition(storagePrefix) {
+  function readSavedState(storagePrefix) {
     try {
-      const rawPosition = window.localStorage.getItem(getStorageKey(storagePrefix));
-      return rawPosition ? JSON.parse(rawPosition) : null;
+      const rawState = window.localStorage.getItem(getStorageKey(storagePrefix));
+      const rawLegacyPosition = window.localStorage.getItem(getLegacyPositionKey(storagePrefix));
+
+      if (rawState) {
+        return JSON.parse(rawState);
+      }
+
+      return rawLegacyPosition ? JSON.parse(rawLegacyPosition) : null;
     } catch (error) {
       return null;
     }
   }
 
-  function savePosition(root, storagePrefix) {
+  function getRootAndWindow(rootOrWindow) {
+    if (!rootOrWindow) {
+      return { root: null, windowElement: null };
+    }
+
+    const isWindowElement = rootOrWindow.classList && rootOrWindow.classList.contains('ftp-window');
+    const root = isWindowElement ? rootOrWindow.parentElement : rootOrWindow;
+    const windowElement = isWindowElement ? rootOrWindow : root.querySelector('.ftp-window');
+
+    return { root, windowElement };
+  }
+
+  function saveState(rootOrWindow, storagePrefix) {
+    const { root, windowElement } = getRootAndWindow(rootOrWindow);
+
+    if (!root || !windowElement) {
+      return;
+    }
+
     const rootRect = root.getBoundingClientRect();
+    const windowRect = windowElement.getBoundingClientRect();
 
     try {
       window.localStorage.setItem(getStorageKey(storagePrefix), JSON.stringify({
+        height: Math.round(windowRect.height),
         left: Math.round(rootRect.left),
-        top: Math.round(rootRect.top)
+        top: Math.round(rootRect.top),
+        width: Math.round(windowRect.width)
       }));
     } catch (error) {
-      // Position persistence is nice to have; the app should keep working without it.
+      // Window state persistence is nice to have; the app should keep working without it.
     }
   }
 
   function restorePosition(root, storagePrefix) {
-    const savedPosition = readSavedPosition(storagePrefix);
+    const savedState = readSavedState(storagePrefix);
+    const { windowElement } = getRootAndWindow(root);
 
-    if (!root || !savedPosition) {
+    if (!root || !savedState) {
       return;
+    }
+
+    if (windowElement && savedState.width && savedState.height) {
+      const maxWidth = Math.max(minWidth, window.innerWidth - (viewportPadding * 2));
+      const maxHeight = Math.max(minHeight, window.innerHeight - (viewportPadding * 2));
+
+      windowElement.style.width = `${clamp(Number(savedState.width), minWidth, maxWidth)}px`;
+      windowElement.style.height = `${clamp(Number(savedState.height), minHeight, maxHeight)}px`;
     }
 
     const maxLeft = Math.max(viewportPadding, window.innerWidth - root.offsetWidth - viewportPadding);
     const maxTop = Math.max(viewportPadding, window.innerHeight - root.offsetHeight - viewportPadding);
-    const nextLeft = clamp(Number(savedPosition.left) || viewportPadding, viewportPadding, maxLeft);
-    const nextTop = clamp(Number(savedPosition.top) || viewportPadding, viewportPadding, maxTop);
+    const nextLeft = clamp(Number(savedState.left) || viewportPadding, viewportPadding, maxLeft);
+    const nextTop = clamp(Number(savedState.top) || viewportPadding, viewportPadding, maxTop);
 
     root.style.left = `${nextLeft}px`;
     root.style.top = `${nextTop}px`;
@@ -106,7 +148,7 @@ const FlipTrackerProWindow = (() => {
 
       dragState.root.style.left = `${nextLeft}px`;
       dragState.root.style.top = `${nextTop}px`;
-      savePosition(dragState.root, storagePrefix);
+      saveState(windowElement, storagePrefix);
     });
 
     titlebar.addEventListener('pointerup', (event) => {
@@ -114,7 +156,7 @@ const FlipTrackerProWindow = (() => {
         return;
       }
 
-      savePosition(dragState.root, storagePrefix);
+      saveState(windowElement, storagePrefix);
       dragState = null;
       titlebar.releasePointerCapture(event.pointerId);
       delete windowElement.dataset.dragging;
@@ -122,11 +164,75 @@ const FlipTrackerProWindow = (() => {
 
     titlebar.addEventListener('pointercancel', () => {
       if (dragState) {
-        savePosition(dragState.root, storagePrefix);
+        saveState(windowElement, storagePrefix);
       }
 
       dragState = null;
       delete windowElement.dataset.dragging;
+    });
+  }
+
+  function makeResizable(windowElement, storagePrefix) {
+    const resizeHandle = windowElement.querySelector('[data-window-resize-handle]');
+    let resizeState = null;
+
+    if (!resizeHandle) {
+      return;
+    }
+
+    resizeHandle.addEventListener('pointerdown', (event) => {
+      if (windowElement.dataset.displayMode === 'compact') {
+        return;
+      }
+
+      event.preventDefault();
+      const rect = windowElement.getBoundingClientRect();
+      resizeState = {
+        height: rect.height,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        width: rect.width
+      };
+
+      resizeHandle.setPointerCapture(event.pointerId);
+      windowElement.dataset.resizing = 'true';
+    });
+
+    resizeHandle.addEventListener('pointermove', (event) => {
+      if (!resizeState) {
+        return;
+      }
+
+      const root = windowElement.parentElement;
+      const rootRect = root.getBoundingClientRect();
+      const maxWidth = Math.max(minWidth, window.innerWidth - rootRect.left - viewportPadding);
+      const maxHeight = Math.max(minHeight, window.innerHeight - rootRect.top - viewportPadding);
+      const nextWidth = clamp(resizeState.width + event.clientX - resizeState.pointerX, minWidth, maxWidth);
+      const nextHeight = clamp(resizeState.height + event.clientY - resizeState.pointerY, minHeight, maxHeight);
+
+      windowElement.style.width = `${nextWidth}px`;
+      windowElement.style.height = `${nextHeight}px`;
+      saveState(windowElement, storagePrefix);
+    });
+
+    resizeHandle.addEventListener('pointerup', (event) => {
+      if (!resizeState) {
+        return;
+      }
+
+      saveState(windowElement, storagePrefix);
+      resizeState = null;
+      resizeHandle.releasePointerCapture(event.pointerId);
+      delete windowElement.dataset.resizing;
+    });
+
+    resizeHandle.addEventListener('pointercancel', () => {
+      if (resizeState) {
+        saveState(windowElement, storagePrefix);
+      }
+
+      resizeState = null;
+      delete windowElement.dataset.resizing;
     });
   }
 
@@ -149,6 +255,8 @@ const FlipTrackerProWindow = (() => {
         <main class="ftp-body">
           ${bodyHtml}
         </main>
+
+        <span class="ftp-resize-handle" data-window-resize-handle aria-hidden="true"></span>
       </div>
     `);
 
@@ -160,11 +268,13 @@ const FlipTrackerProWindow = (() => {
       const isCompact = windowElement.dataset.displayMode === 'compact';
       setWindowState(windowElement, 'open');
       setDisplayMode(windowElement, isCompact ? 'expanded' : 'compact', labels);
+      saveState(windowElement, storagePrefix);
     });
 
     minimizeButton.addEventListener('click', () => {
       setWindowState(windowElement, 'open');
       setDisplayMode(windowElement, 'compact', labels);
+      saveState(windowElement, storagePrefix);
     });
 
     closeButton.addEventListener('click', () => {
@@ -172,6 +282,7 @@ const FlipTrackerProWindow = (() => {
     });
 
     makeDraggable(windowElement, storagePrefix);
+    makeResizable(windowElement, storagePrefix);
 
     return windowElement;
   }
