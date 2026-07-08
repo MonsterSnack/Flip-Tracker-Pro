@@ -27,6 +27,7 @@ const FlipTrackerProBackup = (() => {
       profit: Number(flip.profit) || 0,
       totalBuy: Number(flip.totalBuy) || 0,
       totalSell: Number(flip.totalSell) || 0,
+      notes: String(flip.notes || ''),
       createdAt: flip.createdAt || now,
       updatedAt: flip.updatedAt || now
     };
