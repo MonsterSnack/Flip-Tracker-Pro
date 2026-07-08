@@ -25,17 +25,24 @@ const FlipTrackerProDashboard = (() => {
     `;
   }
 
-  function render({ flips = [], summary } = {}) {
+  function render({ flips = [], openSummary, summary } = {}) {
     const resolvedSummary = summary || {
       activeFlips: 0,
       successRate: 0,
       totalProfit: 0,
       totalQuantity: 0
     };
+    const resolvedOpenSummary = openSummary || {
+      openCount: 0,
+      openQuantity: 0,
+      totalInvested: 0
+    };
     const recentFlips = flips.slice(0, 3);
     const stats = [
       createStat('Total profit', formatMoney(resolvedSummary.totalProfit)),
       createStat('Saved flips', String(resolvedSummary.activeFlips)),
+      createStat('Open items', String(resolvedOpenSummary.openQuantity)),
+      createStat('Money invested', formatMoney(resolvedOpenSummary.totalInvested)),
       createStat('Items tracked', String(resolvedSummary.totalQuantity)),
       createStat('Win rate', `${resolvedSummary.successRate.toFixed(0)}%`)
     ].join('');
@@ -46,7 +53,7 @@ const FlipTrackerProDashboard = (() => {
     return `
       <section class="ftp-card">
         <h2>Dashboard</h2>
-        <p>Your saved flip summary updates when you add entries.</p>
+        <p>Your completed profit and open purchases update as you add entries.</p>
       </section>
 
       <section class="ftp-stats" aria-label="Trading summary">
