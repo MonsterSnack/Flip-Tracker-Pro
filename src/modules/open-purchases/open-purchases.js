@@ -197,6 +197,15 @@ const FlipTrackerProOpenPurchases = (() => {
 
     section.querySelectorAll('[data-delete-purchase]').forEach((button) => {
       button.addEventListener('click', () => {
+        const purchase = store && typeof store.findOpenPurchase === 'function'
+          ? store.findOpenPurchase(storagePrefix, button.dataset.deletePurchase)
+          : null;
+        const itemName = purchase && purchase.itemName ? purchase.itemName : 'this open purchase';
+
+        if (!window.confirm(`Delete ${itemName}? This cannot be undone.`)) {
+          return;
+        }
+
         if (store && typeof store.removeOpenPurchase === 'function') {
           store.removeOpenPurchase(storagePrefix, button.dataset.deletePurchase);
         }
