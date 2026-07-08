@@ -59,6 +59,10 @@
       display: none;
     }
 
+    #${config.rootId} .ftp-window[data-dragging="true"] .ftp-titlebar {
+      cursor: grabbing;
+    }
+
     #${config.rootId} .ftp-titlebar {
       display: flex;
       align-items: center;
@@ -67,6 +71,9 @@
       padding: 12px 14px;
       border-bottom: 1px solid #313744;
       background: #181b22;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
     }
 
     #${config.rootId} .ftp-title {
