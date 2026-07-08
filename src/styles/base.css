@@ -200,7 +200,8 @@
   font-size: 18px;
 }
 
-.ftp-flip-list {
+.ftp-flip-list,
+.ftp-saved-flips {
   display: grid;
   gap: 6px;
   list-style: none;
@@ -208,16 +209,41 @@
   padding: 0;
 }
 
-.ftp-flip-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.ftp-flip-row,
+.ftp-saved-flip {
   border: 1px solid var(--ftp-border);
   border-radius: 6px;
   background: var(--ftp-surface);
   font-size: 12px;
   padding: 8px;
+}
+
+.ftp-flip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ftp-saved-flip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.ftp-saved-flip-main,
+.ftp-saved-flip-side {
+  display: grid;
+  gap: 4px;
+}
+
+.ftp-saved-flip-main span {
+  color: var(--ftp-muted);
+  font-size: 11px;
+}
+
+.ftp-saved-flip-side {
+  justify-items: end;
 }
 
 [data-profit-state="positive"] {
@@ -293,10 +319,10 @@
   font-size: 20px;
 }
 
-.ftp-primary-button {
+.ftp-primary-button,
+.ftp-danger-button {
   border: 0;
   border-radius: 6px;
-  background: var(--ftp-accent);
   color: #ffffff;
   cursor: pointer;
   font: inherit;
@@ -305,6 +331,21 @@
   padding: 9px 10px;
 }
 
+.ftp-primary-button {
+  background: var(--ftp-accent);
+}
+
 .ftp-primary-button:hover {
   background: var(--ftp-accent-strong);
+}
+
+.ftp-danger-button {
+  background: #3a2024;
+  color: #ffb3b3;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.ftp-danger-button:hover {
+  background: #5a2930;
 }
