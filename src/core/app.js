@@ -1,17 +1,18 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.2.1
+// @version      0.2.2
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.2.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.2.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.2.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.2.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.2.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.2.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.2.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.2.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.2.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.2.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.2.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.2.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.2.2
 // @grant        none
 // ==/UserScript==
 
@@ -21,7 +22,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.2.1',
+    version: '0.2.2',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -35,6 +36,7 @@
   const flipStore = window.FlipTrackerProFlipStore;
   const dashboard = window.FlipTrackerProDashboard;
   const flipEntry = window.FlipTrackerProFlipEntry;
+  const backup = window.FlipTrackerProBackup;
   const savedFlips = window.FlipTrackerProSavedFlips;
 
   const styles = `
@@ -84,17 +86,14 @@
 
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-version,
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-window-actions,
-    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-body {
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-body,
+    #${config.rootId} .ftp-window[data-window-state="minimized"] .ftp-body,
+    #${config.rootId} .ftp-window[data-window-state="closed"] {
       display: none;
     }
 
     #${config.rootId} .ftp-window[data-window-state="minimized"] {
       min-height: 0;
-    }
-
-    #${config.rootId} .ftp-window[data-window-state="minimized"] .ftp-body,
-    #${config.rootId} .ftp-window[data-window-state="closed"] {
-      display: none;
     }
 
     #${config.rootId} .ftp-window[data-dragging="true"] .ftp-titlebar {
@@ -115,9 +114,15 @@
     }
 
     #${config.rootId} .ftp-title-group,
+    #${config.rootId} .ftp-body,
+    #${config.rootId} .ftp-stats,
+    #${config.rootId} .ftp-flip-list,
+    #${config.rootId} .ftp-saved-flips,
     #${config.rootId} .ftp-saved-flip-main,
     #${config.rootId} .ftp-saved-flip-side,
     #${config.rootId} .ftp-form,
+    #${config.rootId} .ftp-form-grid,
+    #${config.rootId} .ftp-form-actions,
     #${config.rootId} .ftp-field,
     #${config.rootId} .ftp-profit-preview {
       display: grid;
@@ -185,7 +190,6 @@
     }
 
     #${config.rootId} .ftp-body {
-      display: grid;
       gap: 12px;
       max-height: 560px;
       overflow-y: auto;
@@ -215,12 +219,12 @@
     #${config.rootId} .ftp-stats,
     #${config.rootId} .ftp-form-grid,
     #${config.rootId} .ftp-form-actions {
-      display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
 
-    #${config.rootId} [data-saved-flips-controls] {
+    #${config.rootId} [data-saved-flips-controls],
+    #${config.rootId} .ftp-backup-actions {
       margin-top: 10px;
     }
 
@@ -249,7 +253,6 @@
 
     #${config.rootId} .ftp-flip-list,
     #${config.rootId} .ftp-saved-flips {
-      display: grid;
       gap: 6px;
       list-style: none;
       margin: 8px 0 0;
@@ -271,16 +274,13 @@
     }
 
     #${config.rootId} .ftp-saved-flip {
-      display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
     }
 
     #${config.rootId} .ftp-saved-flip-main,
     #${config.rootId} .ftp-saved-flip-side,
-    #${config.rootId} .ftp-form,
-    #${config.rootId} .ftp-field,
-    #${config.rootId} .ftp-profit-preview {
+    #${config.rootId} .ftp-field {
       gap: 5px;
     }
 
@@ -292,11 +292,13 @@
       gap: 6px;
     }
 
-    #${config.rootId} [data-profit-state="positive"] {
+    #${config.rootId} [data-profit-state="positive"],
+    #${config.rootId} .ftp-status[data-status="success"] {
       color: #3ecf8e;
     }
 
-    #${config.rootId} [data-profit-state="negative"] {
+    #${config.rootId} [data-profit-state="negative"],
+    #${config.rootId} .ftp-status[data-status="error"] {
       color: #ff6b6b;
     }
 
@@ -327,6 +329,7 @@
     }
 
     #${config.rootId} .ftp-profit-preview {
+      gap: 3px;
       border: 1px solid #313744;
       border-radius: 8px;
       background: #181b22;
@@ -335,6 +338,11 @@
 
     #${config.rootId} .ftp-profit-preview strong {
       font-size: 20px;
+    }
+
+    #${config.rootId} .ftp-status {
+      margin-top: 8px;
+      font-weight: 700;
     }
 
     #${config.rootId} .ftp-primary-button,
@@ -425,17 +433,28 @@
     const flipEntryHtml = flipEntry && typeof flipEntry.render === 'function'
       ? flipEntry.render()
       : '<section class="ftp-card"><h2>Flip form unavailable</h2><p>The flip entry module did not load.</p></section>';
+    const backupHtml = backup && typeof backup.render === 'function'
+      ? backup.render()
+      : '<section class="ftp-card"><h2>Backup unavailable</h2><p>The backup module did not load.</p></section>';
     const savedFlipsHtml = savedFlips && typeof savedFlips.render === 'function'
       ? savedFlips.render({ flips })
       : '<section class="ftp-card"><h2>Saved flips unavailable</h2><p>The saved flips module did not load.</p></section>';
 
-    return `${dashboardHtml}${flipEntryHtml}${savedFlipsHtml}`;
+    return `${dashboardHtml}${flipEntryHtml}${backupHtml}${savedFlipsHtml}`;
   }
 
   function bindModules(root) {
     if (flipEntry && typeof flipEntry.bind === 'function') {
       flipEntry.bind(root, {
         onSave: () => renderApp(root),
+        storagePrefix: config.storagePrefix,
+        store: flipStore
+      });
+    }
+
+    if (backup && typeof backup.bind === 'function') {
+      backup.bind(root, {
+        onImport: () => renderApp(root),
         storagePrefix: config.storagePrefix,
         store: flipStore
       });
