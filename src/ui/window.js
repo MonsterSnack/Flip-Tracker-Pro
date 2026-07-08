@@ -15,6 +15,14 @@ const FlipTrackerProWindow = (() => {
     windowElement.dataset.windowState = nextState;
   }
 
+  function setDisplayMode(windowElement, nextMode, labels) {
+    const titleButton = windowElement.querySelector('[data-action="toggle-display"]');
+    windowElement.dataset-displayMode = nextMode;
+    windowElement.dataset.displayMode = nextMode;
+    titleButton.textContent = nextMode === 'compact' ? labels.shortTitle : labels.title;
+    titleButton.setAttribute('aria-label', nextMode === 'compact' ? `Expand ${labels.title}` : `Collapse ${labels.title}`);
+  }
+
   function makeDraggable(windowElement) {
     const titlebar = windowElement.querySelector('[data-window-drag-handle]');
     let dragState = null;
@@ -74,12 +82,13 @@ const FlipTrackerProWindow = (() => {
     });
   }
 
-  function createWindow({ title, version, bodyHtml }) {
+  function createWindow({ title, shortTitle = title, version, bodyHtml }) {
+    const labels = { title, shortTitle };
     const windowElement = createElementFromHtml(`
-      <div class="ftp-window" data-window-state="open">
+      <div class="ftp-window" data-window-state="open" data-display-mode="compact">
         <header class="ftp-titlebar" data-window-drag-handle>
-          <div>
-            <h1 class="ftp-title">${title}</h1>
+          <div class="ftp-title-group">
+            <button class="ftp-title-button" type="button" data-action="toggle-display" aria-label="Expand ${title}">${shortTitle}</button>
             <span class="ftp-version">v${version}</span>
           </div>
 
@@ -95,8 +104,14 @@ const FlipTrackerProWindow = (() => {
       </div>
     `);
 
+    const titleButton = windowElement.querySelector('[data-action="toggle-display"]');
     const minimizeButton = windowElement.querySelector('[data-action="minimize"]');
     const closeButton = windowElement.querySelector('[data-action="close"]');
+
+    titleButton.addEventListener('click', () => {
+      const isCompact = windowElement.dataset.displayMode === 'compact';
+      setDisplayMode(windowElement, isCompact ? 'expanded' : 'compact', labels);
+    });
 
     minimizeButton.addEventListener('click', () => {
       const isMinimized = windowElement.dataset.windowState === 'minimized';
