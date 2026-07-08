@@ -7,9 +7,17 @@ const FlipTrackerProFlipStore = (() => {
     return window.FlipTrackerProPurchaseLotService;
   }
 
+  function getPortfolioService() {
+    return window.FlipTrackerProPortfolioService;
+  }
+
+  function getStatisticsService() {
+    return window.FlipTrackerProStatisticsService;
+  }
+
   function getData(storagePrefix) {
     const storageService = getStorageService();
-    return storageService ? storageService.load(storagePrefix) : { purchaseLots: [], sales: [] };
+    return storageService ? storageService.load(storagePrefix) : { purchaseLots: [], sales: [], settings: {} };
   }
 
   function normalizeSale(sale) {
@@ -19,11 +27,11 @@ const FlipTrackerProFlipStore = (() => {
       : sale;
   }
 
-  function normalizeOpenPurchase(purchase) {
+  function normalizeOpenPurchase(purchaseLot) {
     const storageService = getStorageService();
     const normalizedLot = storageService && typeof storageService.normalizePurchaseLot === 'function'
-      ? storageService.normalizePurchaseLot(purchase)
-      : purchase;
+      ? storageService.normalizePurchaseLot(purchaseLot)
+      : purchaseLot;
 
     return {
       ...normalizedLot,
@@ -35,7 +43,7 @@ const FlipTrackerProFlipStore = (() => {
     return getData(storagePrefix).sales;
   }
 
-  function write(storagePrefix, flips) {
+  function write(storagePrefix, sales) {
     const storageService = getStorageService();
 
     if (!storageService) {
@@ -44,7 +52,7 @@ const FlipTrackerProFlipStore = (() => {
 
     storageService.update(storagePrefix, (data) => ({
       ...data,
-      sales: Array.isArray(flips) ? flips.map(normalizeSale) : []
+      sales: Array.isArray(sales) ? sales.map(normalizeSale) : []
     }));
 
     return true;
@@ -54,7 +62,7 @@ const FlipTrackerProFlipStore = (() => {
     return getData(storagePrefix).purchaseLots.map(normalizeOpenPurchase);
   }
 
-  function writeOpenPurchases(storagePrefix, purchases) {
+  function writeOpenPurchases(storagePrefix, purchaseLots) {
     const storageService = getStorageService();
 
     if (!storageService) {
@@ -63,44 +71,44 @@ const FlipTrackerProFlipStore = (() => {
 
     storageService.update(storagePrefix, (data) => ({
       ...data,
-      purchaseLots: Array.isArray(purchases) ? purchases.map((purchase) => storageService.normalizePurchaseLot(purchase)) : []
+      purchaseLots: Array.isArray(purchaseLots) ? purchaseLots.map((purchaseLot) => storageService.normalizePurchaseLot(purchaseLot)) : []
     }));
 
     return true;
   }
 
-  function add(storagePrefix, flip) {
+  function add(storagePrefix, sale) {
     const storageService = getStorageService();
-    const nextFlip = normalizeSale(flip || {});
+    const nextSale = normalizeSale(sale || {});
 
     if (storageService) {
       storageService.update(storagePrefix, (data) => ({
         ...data,
-        sales: [nextFlip, ...data.sales]
+        sales: [nextSale, ...data.sales]
       }));
     }
 
-    return nextFlip;
+    return nextSale;
   }
 
-  function addOpenPurchase(storagePrefix, purchase) {
+  function addOpenPurchase(storagePrefix, purchaseLot) {
     const purchaseLotService = getPurchaseLotService();
     const lot = purchaseLotService && typeof purchaseLotService.create === 'function'
-      ? purchaseLotService.create(storagePrefix, purchase)
-      : normalizeOpenPurchase(purchase || {});
+      ? purchaseLotService.create(storagePrefix, purchaseLot)
+      : normalizeOpenPurchase(purchaseLot || {});
 
     return normalizeOpenPurchase(lot);
   }
 
-  function find(storagePrefix, flipId) {
-    return read(storagePrefix).find((flip) => flip.id === flipId) || null;
+  function find(storagePrefix, saleId) {
+    return read(storagePrefix).find((sale) => sale.id === saleId) || null;
   }
 
-  function findOpenPurchase(storagePrefix, purchaseId) {
-    return readOpenPurchases(storagePrefix).find((purchase) => purchase.id === purchaseId) || null;
+  function findOpenPurchase(storagePrefix, purchaseLotId) {
+    return readOpenPurchases(storagePrefix).find((purchaseLot) => purchaseLot.id === purchaseLotId) || null;
   }
 
-  function remove(storagePrefix, flipId) {
+  function remove(storagePrefix, saleId) {
     const storageService = getStorageService();
 
     if (!storageService) {
@@ -109,25 +117,25 @@ const FlipTrackerProFlipStore = (() => {
 
     const nextData = storageService.update(storagePrefix, (data) => ({
       ...data,
-      sales: data.sales.filter((flip) => flip.id !== flipId)
+      sales: data.sales.filter((sale) => sale.id !== saleId)
     }));
 
     return nextData.sales;
   }
 
-  function removeOpenPurchase(storagePrefix, purchaseId) {
+  function removeOpenPurchase(storagePrefix, purchaseLotId) {
     const purchaseLotService = getPurchaseLotService();
 
     if (purchaseLotService && typeof purchaseLotService.remove === 'function') {
-      return purchaseLotService.remove(storagePrefix, purchaseId).map(normalizeOpenPurchase);
+      return purchaseLotService.remove(storagePrefix, purchaseLotId).map(normalizeOpenPurchase);
     }
 
     return [];
   }
 
-  function update(storagePrefix, flipId, patch) {
+  function update(storagePrefix, saleId, patch) {
     const storageService = getStorageService();
-    let updatedFlip = null;
+    let updatedSale = null;
 
     if (!storageService) {
       return null;
@@ -135,64 +143,56 @@ const FlipTrackerProFlipStore = (() => {
 
     storageService.update(storagePrefix, (data) => ({
       ...data,
-      sales: data.sales.map((flip) => {
-        if (flip.id !== flipId) {
-          return flip;
+      sales: data.sales.map((sale) => {
+        if (sale.id !== saleId) {
+          return sale;
         }
 
-        updatedFlip = normalizeSale({
-          ...flip,
+        updatedSale = normalizeSale({
+          ...sale,
           ...(patch || {}),
-          id: flip.id,
-          createdAt: flip.createdAt,
+          id: sale.id,
+          createdAt: sale.createdAt,
           updatedAt: new Date().toISOString()
         });
 
-        return updatedFlip;
+        return updatedSale;
       })
     }));
 
-    return updatedFlip;
+    return updatedSale;
   }
 
-  function summarizeOpenPurchases(purchases) {
-    const totalInvested = purchases.reduce((total, purchase) => {
-      const buyPrice = Number(purchase.buyPrice || purchase.unitCost) || 0;
-      const quantity = Number(purchase.quantity) || 0;
-      return total + (buyPrice * quantity);
-    }, 0);
+  function summarizeOpenPurchases(purchases, storagePrefix) {
+    const portfolioService = getPortfolioService();
+    const data = getData(storagePrefix);
+    const portfolio = portfolioService && typeof portfolioService.calculate === 'function'
+      ? portfolioService.calculate(data.purchaseLots, data.settings)
+      : [];
+    const summary = portfolioService && typeof portfolioService.summarize === 'function'
+      ? portfolioService.summarize(portfolio)
+      : { itemCount: 0, openQuantity: 0, totalInvestment: 0 };
 
     return {
-      openCount: purchases.length,
-      openQuantity: purchases.reduce((total, purchase) => total + (Number(purchase.quantity) || 0), 0),
-      totalInvested
+      openCount: summary.itemCount,
+      openQuantity: summary.openQuantity,
+      totalInvested: summary.totalInvestment
     };
   }
 
-  function summarize(flips) {
-    const summary = flips.reduce((totals, flip) => {
-      totals.totalProfit += Number(flip.profit) || 0;
-      totals.totalBuy += Number(flip.totalBuy) || 0;
-      totals.totalSell += Number(flip.totalSell) || 0;
-      totals.totalQuantity += Number(flip.quantity) || 0;
-
-      if ((Number(flip.profit) || 0) >= 0) {
-        totals.successfulFlips += 1;
-      }
-
-      return totals;
-    }, {
-      successfulFlips: 0,
-      totalBuy: 0,
-      totalProfit: 0,
-      totalQuantity: 0,
-      totalSell: 0
-    });
+  function summarize(sales, storagePrefix) {
+    const statisticsService = getStatisticsService();
+    const data = getData(storagePrefix);
+    const resolvedSales = Array.isArray(sales) ? sales : data.sales;
+    const statistics = statisticsService && typeof statisticsService.calculate === 'function'
+      ? statisticsService.calculate(resolvedSales, data.purchaseLots)
+      : { averageROI: 0, lifetimeProfit: 0, totalTrades: resolvedSales.length };
 
     return {
-      ...summary,
-      activeFlips: flips.length,
-      successRate: flips.length > 0 ? (summary.successfulFlips / flips.length) * 100 : 0
+      activeFlips: statistics.totalTrades,
+      successRate: resolvedSales.length > 0 ? (resolvedSales.filter((sale) => (Number(sale.profit) || 0) >= 0).length / resolvedSales.length) * 100 : 0,
+      totalProfit: statistics.lifetimeProfit,
+      totalQuantity: resolvedSales.reduce((total, sale) => total + (Number(sale.quantity) || 0), 0)
     };
   }
 
