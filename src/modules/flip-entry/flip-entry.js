@@ -28,10 +28,12 @@ const FlipTrackerProFlipEntry = (() => {
     const margin = totalBuy > 0 ? (profit / totalBuy) * 100 : 0;
 
     return {
+      buyPrice,
       fees,
       margin,
       profit,
       quantity,
+      sellPrice,
       totalBuy,
       totalSell
     };
@@ -44,25 +46,25 @@ const FlipTrackerProFlipEntry = (() => {
         <form class="ftp-form" data-flip-entry-form>
           <label class="ftp-field">
             <span>Item</span>
-            <input class="ftp-input" name="itemName" type="text" placeholder="Item name" autocomplete="off">
+            <input class="ftp-input" name="itemName" type="text" placeholder="Item name" autocomplete="off" required>
           </label>
 
           <div class="ftp-form-grid">
             <label class="ftp-field">
               <span>Buy</span>
-              <input class="ftp-input" name="buyPrice" type="number" min="0" step="1" placeholder="0">
+              <input class="ftp-input" name="buyPrice" type="number" min="0" step="1" placeholder="0" required>
             </label>
 
             <label class="ftp-field">
               <span>Sell</span>
-              <input class="ftp-input" name="sellPrice" type="number" min="0" step="1" placeholder="0">
+              <input class="ftp-input" name="sellPrice" type="number" min="0" step="1" placeholder="0" required>
             </label>
           </div>
 
           <div class="ftp-form-grid">
             <label class="ftp-field">
               <span>Qty</span>
-              <input class="ftp-input" name="quantity" type="number" min="1" step="1" value="1">
+              <input class="ftp-input" name="quantity" type="number" min="1" step="1" value="1" required>
             </label>
 
             <label class="ftp-field">
@@ -83,7 +85,7 @@ const FlipTrackerProFlipEntry = (() => {
     `;
   }
 
-  function bind(root) {
+  function bind(root, { onSave, storagePrefix, store } = {}) {
     const form = root.querySelector('[data-flip-entry-form]');
 
     if (!form) {
@@ -99,12 +101,34 @@ const FlipTrackerProFlipEntry = (() => {
       previewValue.textContent = formatMoney(result.profit);
       previewValue.dataset.profitState = result.profit >= 0 ? 'positive' : 'negative';
       previewMeta.textContent = `Margin ${result.margin.toFixed(1)}%`;
+      return result;
     }
 
     form.addEventListener('input', updatePreview);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
+
+      if (!form.reportValidity()) {
+        return;
+      }
+
+      const result = updatePreview();
+      const flip = {
+        ...result,
+        itemName: form.elements.itemName.value.trim()
+      };
+
+      if (store && typeof store.add === 'function') {
+        store.add(storagePrefix, flip);
+      }
+
+      form.reset();
+      form.elements.quantity.value = '1';
       updatePreview();
+
+      if (typeof onSave === 'function') {
+        onSave();
+      }
     });
 
     updatePreview();
