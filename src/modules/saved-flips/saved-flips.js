@@ -152,6 +152,14 @@ const FlipTrackerProSavedFlips = (() => {
       root.querySelectorAll('[data-delete-flip]').forEach((button) => {
         button.addEventListener('click', () => {
           const flipId = button.dataset.deleteFlip;
+          const flip = store && typeof store.find === 'function'
+            ? store.find(storagePrefix, flipId)
+            : null;
+          const itemName = flip && flip.itemName ? flip.itemName : 'this saved flip';
+
+          if (!window.confirm(`Delete ${itemName}? This cannot be undone.`)) {
+            return;
+          }
 
           if (store && typeof store.remove === 'function') {
             store.remove(storagePrefix, flipId);
