@@ -2,6 +2,12 @@ const FlipTrackerProNotificationService = (() => {
   const allowedTypes = new Set(['success', 'error', 'warning', 'info']);
   let container = null;
 
+  function escapeHtml(value) {
+    return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
+      ? window.FlipTrackerProHtml.escapeHtml(value)
+      : String(value ?? '');
+  }
+
   function ensureContainer(rootId) {
     if (container && document.body.contains(container)) {
       return container;
@@ -25,8 +31,8 @@ const FlipTrackerProNotificationService = (() => {
     toast.className = 'ftp-notification';
     toast.dataset.type = resolvedType;
     toast.innerHTML = `
-      <strong>${title || resolvedType}</strong>
-      ${message ? `<span>${message}</span>` : ''}
+      <strong>${escapeHtml(title || resolvedType)}</strong>
+      ${message ? `<span>${escapeHtml(message)}</span>` : ''}
     `;
 
     notifications.appendChild(toast);
