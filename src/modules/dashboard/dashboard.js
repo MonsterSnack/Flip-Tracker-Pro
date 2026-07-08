@@ -7,6 +7,10 @@ const FlipTrackerProDashboard = (() => {
     }).format(value || 0);
   }
 
+  function formatPercent(value) {
+    return `${(Number(value) || 0).toFixed(1)}%`;
+  }
+
   function createStat(label, value) {
     return `
       <div class="ftp-stat">
@@ -39,7 +43,7 @@ const FlipTrackerProDashboard = (() => {
     `;
   }
 
-  function render({ openSummary, summary } = {}) {
+  function render({ openSummary, portfolioSummary, statistics, summary } = {}) {
     const resolvedSummary = summary || {
       activeFlips: 0,
       successRate: 0,
@@ -51,23 +55,42 @@ const FlipTrackerProDashboard = (() => {
       openQuantity: 0,
       totalInvested: 0
     };
+    const resolvedPortfolioSummary = portfolioSummary || {
+      estimatedProfit: 0,
+      itemCount: 0,
+      openQuantity: resolvedOpenSummary.openQuantity,
+      totalInvestment: resolvedOpenSummary.totalInvested
+    };
+    const resolvedStatistics = statistics || {
+      averageROI: 0,
+      lifetimeProfit: resolvedSummary.totalProfit,
+      monthlyProfit: 0,
+      todayProfit: 0,
+      totalTrades: resolvedSummary.activeFlips,
+      weeklyProfit: 0
+    };
     const stats = [
-      createStat('Total profit', formatMoney(resolvedSummary.totalProfit)),
-      createStat('Saved flips', String(resolvedSummary.activeFlips)),
-      createStat('Open items', String(resolvedOpenSummary.openQuantity)),
-      createStat('Money invested', formatMoney(resolvedOpenSummary.totalInvested)),
-      createStat('Items tracked', String(resolvedSummary.totalQuantity)),
-      createStat('Win rate', `${resolvedSummary.successRate.toFixed(0)}%`)
+      createStat('Lifetime profit', formatMoney(resolvedStatistics.lifetimeProfit)),
+      createStat('Today profit', formatMoney(resolvedStatistics.todayProfit)),
+      createStat('Open items', String(resolvedPortfolioSummary.openQuantity)),
+      createStat('Invested', formatMoney(resolvedPortfolioSummary.totalInvestment)),
+      createStat('Trades', String(resolvedStatistics.totalTrades)),
+      createStat('Average ROI', formatPercent(resolvedStatistics.averageROI))
     ].join('');
 
     return `
       <section class="ftp-card">
         <h2>Dashboard</h2>
-        <p>Your completed profit and open purchases update as you add entries.</p>
+        <p>Your portfolio, sales, and profit stats update as you add entries.</p>
       </section>
 
       <section class="ftp-stats" aria-label="Trading summary">
         ${stats}
+      </section>
+
+      <section class="ftp-card">
+        <h2>This Month</h2>
+        <p>Weekly profit ${formatMoney(resolvedStatistics.weeklyProfit)} / Monthly profit ${formatMoney(resolvedStatistics.monthlyProfit)} / Estimated open profit ${formatMoney(resolvedPortfolioSummary.estimatedProfit)}</p>
       </section>
     `;
   }
