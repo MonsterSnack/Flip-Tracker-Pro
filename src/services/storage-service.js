@@ -1,6 +1,7 @@
 const FlipTrackerProStorageService = (() => {
   const schemaVersion = 1;
   const defaultSettings = Object.freeze({
+    activeRoute: 'dashboard',
     bazaarFeeRate: 0.03,
     targetRoi: 20
   });
@@ -82,11 +83,14 @@ const FlipTrackerProStorageService = (() => {
   }
 
   function normalizeSettings(settings) {
+    const nextSettings = settings && typeof settings === 'object' ? settings : {};
+
     return {
       ...defaultSettings,
-      ...(settings || {}),
-      bazaarFeeRate: toNumber(settings && settings.bazaarFeeRate, defaultSettings.bazaarFeeRate),
-      targetRoi: toNumber(settings && settings.targetRoi, defaultSettings.targetRoi)
+      ...nextSettings,
+      activeRoute: String(nextSettings.activeRoute || defaultSettings.activeRoute),
+      bazaarFeeRate: toNumber(nextSettings.bazaarFeeRate, defaultSettings.bazaarFeeRate),
+      targetRoi: toNumber(nextSettings.targetRoi, defaultSettings.targetRoi)
     };
   }
 
