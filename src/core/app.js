@@ -67,8 +67,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 12px 14px;
+      gap: 10px;
+      padding: 7px 10px;
       border-bottom: 1px solid #313744;
       background: #181b22;
       cursor: grab;
@@ -78,33 +78,36 @@
 
     #${config.rootId} .ftp-title {
       margin: 0;
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
       letter-spacing: 0;
+      line-height: 1.15;
     }
 
     #${config.rootId} .ftp-version {
       color: #9aa3b2;
-      font-size: 12px;
+      font-size: 10px;
+      line-height: 1;
     }
 
     #${config.rootId} .ftp-window-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
     }
 
     #${config.rootId} .ftp-window-button {
-      width: 26px;
-      height: 24px;
+      width: 22px;
+      height: 20px;
       border: 1px solid #313744;
-      border-radius: 6px;
+      border-radius: 5px;
       background: #20242d;
       color: #f4f6fb;
       cursor: pointer;
       font: inherit;
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1;
+      padding: 0;
     }
 
     #${config.rootId} .ftp-window-button:hover {
