@@ -1,4 +1,10 @@
 const FlipTrackerProAnalytics = (() => {
+  function escapeHtml(value) {
+    return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
+      ? window.FlipTrackerProHtml.escapeHtml(value)
+      : String(value ?? '');
+  }
+
   function formatMoney(value) {
     return new Intl.NumberFormat('en-US', {
       maximumFractionDigits: 0,
@@ -11,15 +17,15 @@ const FlipTrackerProAnalytics = (() => {
     return `${(Number(value) || 0).toFixed(1)}%`;
   }
 
-  function getDateKey(flip) {
-    const date = new Date(flip.updatedAt || flip.createdAt || Date.now());
+  function getDateKey(sale) {
+    const date = new Date(sale.updatedAt || sale.createdAt || Date.now());
     return Number.isNaN(date.getTime()) ? 'Unknown' : date.toISOString().slice(0, 10);
   }
 
-  function groupProfitByDay(flips) {
-    const grouped = flips.reduce((totals, flip) => {
-      const dateKey = getDateKey(flip);
-      totals[dateKey] = (totals[dateKey] || 0) + (Number(flip.profit) || 0);
+  function groupProfitByDay(sales) {
+    const grouped = sales.reduce((totals, sale) => {
+      const dateKey = getDateKey(sale);
+      totals[dateKey] = (totals[dateKey] || 0) + (Number(sale.profit) || 0);
       return totals;
     }, {});
 
@@ -29,15 +35,15 @@ const FlipTrackerProAnalytics = (() => {
       .slice(-7);
   }
 
-  function groupProfitByItem(flips) {
-    const grouped = flips.reduce((totals, flip) => {
-      const itemName = flip.itemName || 'Unnamed item';
+  function groupProfitByItem(sales) {
+    const grouped = sales.reduce((totals, sale) => {
+      const itemName = sale.itemName || 'Unnamed item';
 
       if (!totals[itemName]) {
         totals[itemName] = 0;
       }
 
-      totals[itemName] += Number(flip.profit) || 0;
+      totals[itemName] += Number(sale.profit) || 0;
       return totals;
     }, {});
 
@@ -47,47 +53,27 @@ const FlipTrackerProAnalytics = (() => {
       .slice(0, 5);
   }
 
-  function getBestFlip(flips) {
-    return flips.reduce((best, flip) => {
-      if (!best || (Number(flip.profit) || 0) > (Number(best.profit) || 0)) {
-        return flip;
-      }
-
-      return best;
-    }, null);
-  }
-
-  function getWorstFlip(flips) {
-    return flips.reduce((worst, flip) => {
-      if (!worst || (Number(flip.profit) || 0) < (Number(worst.profit) || 0)) {
-        return flip;
-      }
-
-      return worst;
-    }, null);
-  }
-
-  function getAverageProfit(flips) {
-    if (flips.length === 0) {
+  function getAverageProfit(sales) {
+    if (sales.length === 0) {
       return 0;
     }
 
-    return flips.reduce((total, flip) => total + (Number(flip.profit) || 0), 0) / flips.length;
+    return sales.reduce((total, sale) => total + (Number(sale.profit) || 0), 0) / sales.length;
   }
 
-  function getAverageMargin(flips) {
-    if (flips.length === 0) {
+  function getAverageMargin(sales) {
+    if (sales.length === 0) {
       return 0;
     }
 
-    return flips.reduce((total, flip) => total + (Number(flip.margin) || 0), 0) / flips.length;
+    return sales.reduce((total, sale) => total + (Number(sale.margin) || 0), 0) / sales.length;
   }
 
   function renderStat(label, value) {
     return `
       <div class="ftp-stat">
-        <span>${label}</span>
-        <strong>${value}</strong>
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
       </div>
     `;
   }
@@ -96,7 +82,7 @@ const FlipTrackerProAnalytics = (() => {
     if (rows.length === 0) {
       return `
         <section class="ftp-card">
-          <h2>${title}</h2>
+          <h2>${escapeHtml(title)}</h2>
           <p>No completed flips yet.</p>
         </section>
       `;
@@ -110,7 +96,7 @@ const FlipTrackerProAnalytics = (() => {
       return `
         <li class="ftp-chart-row">
           <div class="ftp-chart-label">
-            <span>${row.label}</span>
+            <span>${escapeHtml(row.label)}</span>
             <strong data-profit-state="${state}">${formatMoney(row.value)}</strong>
           </div>
           <div class="ftp-chart-track">
@@ -122,7 +108,7 @@ const FlipTrackerProAnalytics = (() => {
 
     return `
       <section class="ftp-card">
-        <h2>${title}</h2>
+        <h2>${escapeHtml(title)}</h2>
         <ul class="ftp-chart-list">
           ${bars}
         </ul>
@@ -130,13 +116,14 @@ const FlipTrackerProAnalytics = (() => {
     `;
   }
 
-  function render({ flips = [] } = {}) {
-    const bestFlip = getBestFlip(flips);
-    const worstFlip = getWorstFlip(flips);
-    const bestItem = groupProfitByItem(flips)[0] || null;
+  function render({ flips = [], sales = flips, statistics } = {}) {
+    const bestFlip = statistics && statistics.bestFlip ? statistics.bestFlip : null;
+    const worstFlip = statistics && statistics.worstFlip ? statistics.worstFlip : null;
+    const bestItem = groupProfitByItem(sales)[0] || null;
     const stats = [
-      renderStat('Average profit', formatMoney(getAverageProfit(flips))),
-      renderStat('Average margin', formatPercent(getAverageMargin(flips))),
+      renderStat('Average profit', formatMoney(getAverageProfit(sales))),
+      renderStat('Average margin', formatPercent(getAverageMargin(sales))),
+      renderStat('Average ROI', formatPercent(statistics ? statistics.averageROI : 0)),
       renderStat('Best flip', bestFlip ? `${bestFlip.itemName || 'Unnamed'} ${formatMoney(bestFlip.profit)}` : '$0'),
       renderStat('Worst flip', worstFlip ? `${worstFlip.itemName || 'Unnamed'} ${formatMoney(worstFlip.profit)}` : '$0'),
       renderStat('Best item', bestItem ? `${bestItem.label} ${formatMoney(bestItem.value)}` : '$0')
@@ -152,8 +139,8 @@ const FlipTrackerProAnalytics = (() => {
         ${stats}
       </section>
 
-      ${renderBarGraph('Profit By Day', groupProfitByDay(flips))}
-      ${renderBarGraph('Best Items', groupProfitByItem(flips))}
+      ${renderBarGraph('Profit By Day', groupProfitByDay(sales))}
+      ${renderBarGraph('Best Items', groupProfitByItem(sales))}
     `;
   }
 
