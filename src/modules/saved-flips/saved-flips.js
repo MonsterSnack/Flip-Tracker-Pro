@@ -98,40 +98,70 @@ const FlipTrackerProSavedFlips = (() => {
     `;
   }
 
-  function render({ flips = [] } = {}) {
+  function renderResults(flips) {
     const filteredFlips = getFilteredFlips(flips);
-    const listHtml = filteredFlips.length > 0
-      ? `<ul class="ftp-saved-flips">${filteredFlips.map(renderFlip).join('')}</ul>`
-      : '<p>No flips match your search.</p>';
-    const emptyHtml = flips.length > 0 ? listHtml : '<p>No saved flips yet.</p>';
 
+    if (flips.length === 0) {
+      return '<p>No saved flips yet.</p>';
+    }
+
+    if (filteredFlips.length === 0) {
+      return '<p>No flips match your search.</p>';
+    }
+
+    return `<ul class="ftp-saved-flips">${filteredFlips.map(renderFlip).join('')}</ul>`;
+  }
+
+  function render({ flips = [] } = {}) {
     return `
       <section class="ftp-card" data-saved-flips-section>
         <h2>Saved Flips</h2>
         ${flips.length > 0 ? renderControls() : ''}
-        ${emptyHtml}
+        <div data-saved-flips-results>
+          ${renderResults(flips)}
+        </div>
       </section>
     `;
   }
 
   function bind(root, options = {}) {
-    const { onDelete, onEdit, onFilterChange, storagePrefix, store } = options;
+    const { onDelete, onEdit, storagePrefix, store } = options;
     const searchInput = root.querySelector('[data-saved-search]');
     const profitFilter = root.querySelector('[data-saved-profit-filter]');
     const sortSelect = root.querySelector('[data-saved-sort]');
+    const results = root.querySelector('[data-saved-flips-results]');
 
-    const rerenderSavedFlips = () => {
-      const section = root.querySelector('[data-saved-flips-section]');
-      const flips = store && typeof store.read === 'function'
-        ? store.read(storagePrefix)
-        : [];
+    const getFlips = () => store && typeof store.read === 'function'
+      ? store.read(storagePrefix)
+      : [];
 
-      if (!section) {
-        return;
-      }
+    const bindResultActions = () => {
+      root.querySelectorAll('[data-edit-flip]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const flipId = button.dataset.editFlip;
+          const flip = store && typeof store.find === 'function'
+            ? store.find(storagePrefix, flipId)
+            : null;
 
-      section.outerHTML = render({ flips });
-      bind(root, options);
+          if (flip && typeof onEdit === 'function') {
+            onEdit(flip);
+          }
+        });
+      });
+
+      root.querySelectorAll('[data-delete-flip]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const flipId = button.dataset.deleteFlip;
+
+          if (store && typeof store.remove === 'function') {
+            store.remove(storagePrefix, flipId);
+          }
+
+          if (typeof onDelete === 'function') {
+            onDelete();
+          }
+        });
+      });
     };
 
     const updateFilters = () => {
@@ -141,12 +171,10 @@ const FlipTrackerProSavedFlips = (() => {
         sort: sortSelect ? sortSelect.value : defaultFilters.sort
       };
 
-      if (typeof onFilterChange === 'function') {
-        onFilterChange();
-        return;
+      if (results) {
+        results.innerHTML = renderResults(getFlips());
+        bindResultActions();
       }
-
-      rerenderSavedFlips();
     };
 
     if (searchInput) {
@@ -161,32 +189,7 @@ const FlipTrackerProSavedFlips = (() => {
       sortSelect.addEventListener('change', updateFilters);
     }
 
-    root.querySelectorAll('[data-edit-flip]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const flipId = button.dataset.editFlip;
-        const flip = store && typeof store.find === 'function'
-          ? store.find(storagePrefix, flipId)
-          : null;
-
-        if (flip && typeof onEdit === 'function') {
-          onEdit(flip);
-        }
-      });
-    });
-
-    root.querySelectorAll('[data-delete-flip]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const flipId = button.dataset.deleteFlip;
-
-        if (store && typeof store.remove === 'function') {
-          store.remove(storagePrefix, flipId);
-        }
-
-        if (typeof onDelete === 'function') {
-          onDelete();
-        }
-      });
-    });
+    bindResultActions();
   }
 
   return {
