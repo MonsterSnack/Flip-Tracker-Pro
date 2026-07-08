@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.6
+// @version      0.1.7
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.6
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.6
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.6
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.7
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.7
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.7
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.1.7
 // @grant        none
 // ==/UserScript==
 
@@ -18,7 +19,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.1.6',
+    version: '0.1.7',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -30,6 +31,7 @@
   const config = window.FlipTrackerProConfig || fallbackConfig;
   const windowShell = window.FlipTrackerProWindow;
   const dashboard = window.FlipTrackerProDashboard;
+  const flipEntry = window.FlipTrackerProFlipEntry;
 
   const styles = `
     #${config.rootId} {
@@ -171,6 +173,8 @@
     #${config.rootId} .ftp-body {
       display: grid;
       gap: 12px;
+      max-height: 560px;
+      overflow-y: auto;
       padding: 14px;
     }
 
@@ -215,6 +219,89 @@
       margin-top: 4px;
       font-size: 18px;
     }
+
+    #${config.rootId} .ftp-form {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    #${config.rootId} .ftp-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    #${config.rootId} .ftp-field {
+      display: grid;
+      gap: 5px;
+    }
+
+    #${config.rootId} .ftp-field span {
+      color: #9aa3b2;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    #${config.rootId} .ftp-input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #313744;
+      border-radius: 6px;
+      background: #181b22;
+      color: #f4f6fb;
+      font: inherit;
+      font-size: 12px;
+      outline: none;
+      padding: 8px;
+    }
+
+    #${config.rootId} .ftp-input:focus {
+      border-color: #4f8cff;
+    }
+
+    #${config.rootId} .ftp-profit-preview {
+      display: grid;
+      gap: 3px;
+      border: 1px solid #313744;
+      border-radius: 8px;
+      background: #181b22;
+      padding: 10px;
+    }
+
+    #${config.rootId} .ftp-profit-preview span,
+    #${config.rootId} .ftp-profit-preview small {
+      color: #9aa3b2;
+      font-size: 11px;
+    }
+
+    #${config.rootId} .ftp-profit-preview strong {
+      font-size: 20px;
+    }
+
+    #${config.rootId} .ftp-profit-preview strong[data-profit-state="positive"] {
+      color: #3ecf8e;
+    }
+
+    #${config.rootId} .ftp-profit-preview strong[data-profit-state="negative"] {
+      color: #ff6b6b;
+    }
+
+    #${config.rootId} .ftp-primary-button {
+      border: 0;
+      border-radius: 6px;
+      background: #4f8cff;
+      color: #ffffff;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 9px 10px;
+    }
+
+    #${config.rootId} .ftp-primary-button:hover {
+      background: #2f6ee8;
+    }
   `;
 
   function injectStyles() {
@@ -242,17 +329,15 @@
     return root;
   }
 
-  function getDashboardHtml() {
-    if (dashboard && typeof dashboard.render === 'function') {
-      return dashboard.render();
-    }
+  function getAppHtml() {
+    const dashboardHtml = dashboard && typeof dashboard.render === 'function'
+      ? dashboard.render()
+      : '<section class="ftp-card"><h2>Dashboard unavailable</h2><p>The dashboard module did not load.</p></section>';
+    const flipEntryHtml = flipEntry && typeof flipEntry.render === 'function'
+      ? flipEntry.render()
+      : '<section class="ftp-card"><h2>Flip form unavailable</h2><p>The flip entry module did not load.</p></section>';
 
-    return `
-      <section class="ftp-card">
-        <h2>Dashboard unavailable</h2>
-        <p>The dashboard module did not load.</p>
-      </section>
-    `;
+    return `${dashboardHtml}${flipEntryHtml}`;
   }
 
   function renderApp(root) {
@@ -267,12 +352,16 @@
       title: config.appName,
       shortTitle: config.shortName || 'FTP',
       version: config.version,
-      bodyHtml: getDashboardHtml(),
+      bodyHtml: getAppHtml(),
       storagePrefix: config.storagePrefix
     });
 
     root.appendChild(appWindow);
     windowShell.restorePosition(root, config.storagePrefix);
+
+    if (flipEntry && typeof flipEntry.bind === 'function') {
+      flipEntry.bind(root);
+    }
   }
 
   function start() {
