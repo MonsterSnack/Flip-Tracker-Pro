@@ -20,7 +20,10 @@ const FlipTrackerProSavedFlips = (() => {
 
         <div class="ftp-saved-flip-side">
           <strong data-profit-state="${profitState}">${formatMoney(flip.profit)}</strong>
-          <button class="ftp-danger-button" type="button" data-delete-flip="${flip.id}">Delete</button>
+          <div class="ftp-row-actions">
+            <button class="ftp-secondary-button" type="button" data-edit-flip="${flip.id}">Edit</button>
+            <button class="ftp-danger-button" type="button" data-delete-flip="${flip.id}">Delete</button>
+          </div>
         </div>
       </li>
     `;
@@ -39,7 +42,20 @@ const FlipTrackerProSavedFlips = (() => {
     `;
   }
 
-  function bind(root, { onDelete, storagePrefix, store } = {}) {
+  function bind(root, { onDelete, onEdit, storagePrefix, store } = {}) {
+    root.querySelectorAll('[data-edit-flip]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const flipId = button.dataset.editFlip;
+        const flip = store && typeof store.find === 'function'
+          ? store.find(storagePrefix, flipId)
+          : null;
+
+        if (flip && typeof onEdit === 'function') {
+          onEdit(flip);
+        }
+      });
+    });
+
     root.querySelectorAll('[data-delete-flip]').forEach((button) => {
       button.addEventListener('click', () => {
         const flipId = button.dataset.deleteFlip;
