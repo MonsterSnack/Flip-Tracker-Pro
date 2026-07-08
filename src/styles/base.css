@@ -51,8 +51,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--ftp-border);
   background: var(--ftp-surface);
   cursor: grab;
@@ -62,33 +62,36 @@
 
 .ftp-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0;
+  line-height: 1.15;
 }
 
 .ftp-version {
   color: var(--ftp-muted);
-  font-size: 12px;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .ftp-window-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .ftp-window-button {
-  width: 26px;
-  height: 24px;
+  width: 22px;
+  height: 20px;
   border: 1px solid var(--ftp-border);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--ftp-surface-raised);
   color: var(--ftp-text);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
+  padding: 0;
 }
 
 .ftp-window-button:hover {
