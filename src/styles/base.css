@@ -43,6 +43,10 @@
   display: none;
 }
 
+.ftp-window[data-dragging="true"] .ftp-titlebar {
+  cursor: grabbing;
+}
+
 .ftp-titlebar {
   display: flex;
   align-items: center;
@@ -51,6 +55,9 @@
   padding: 12px 14px;
   border-bottom: 1px solid var(--ftp-border);
   background: var(--ftp-surface);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .ftp-title {
