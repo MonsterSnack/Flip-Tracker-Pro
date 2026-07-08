@@ -49,8 +49,8 @@ const FlipTrackerProWindow = (() => {
         return;
       }
 
-      const maxLeft = window.innerWidth - dragState.root.offsetWidth - viewportPadding;
-      const maxTop = window.innerHeight - dragState.root.offsetHeight - viewportPadding;
+      const maxLeft = Math.max(viewportPadding, window.innerWidth - dragState.root.offsetWidth - viewportPadding);
+      const maxTop = Math.max(viewportPadding, window.innerHeight - dragState.root.offsetHeight - viewportPadding);
       const nextLeft = clamp(event.clientX - dragState.pointerOffsetX, viewportPadding, maxLeft);
       const nextTop = clamp(event.clientY - dragState.pointerOffsetY, viewportPadding, maxTop);
 
