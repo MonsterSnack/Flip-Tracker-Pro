@@ -200,6 +200,34 @@
   font-size: 18px;
 }
 
+.ftp-flip-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.ftp-flip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--ftp-border);
+  border-radius: 6px;
+  background: var(--ftp-surface);
+  font-size: 12px;
+  padding: 8px;
+}
+
+[data-profit-state="positive"] {
+  color: var(--ftp-success);
+}
+
+[data-profit-state="negative"] {
+  color: var(--ftp-danger);
+}
+
 .ftp-status {
   color: var(--ftp-success);
   font-size: 12px;
@@ -263,14 +291,6 @@
 
 .ftp-profit-preview strong {
   font-size: 20px;
-}
-
-.ftp-profit-preview strong[data-profit-state="positive"] {
-  color: var(--ftp-success);
-}
-
-.ftp-profit-preview strong[data-profit-state="negative"] {
-  color: var(--ftp-danger);
 }
 
 .ftp-primary-button {
