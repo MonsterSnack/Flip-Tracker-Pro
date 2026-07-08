@@ -11,6 +11,47 @@ const FlipTrackerProWindow = (() => {
     return Math.min(Math.max(value, min), max);
   }
 
+  function getStorageKey(storagePrefix) {
+    return `${storagePrefix || 'flipTrackerPro'}:windowPosition`;
+  }
+
+  function readSavedPosition(storagePrefix) {
+    try {
+      const rawPosition = window.localStorage.getItem(getStorageKey(storagePrefix));
+      return rawPosition ? JSON.parse(rawPosition) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function savePosition(root, storagePrefix) {
+    try {
+      window.localStorage.setItem(getStorageKey(storagePrefix), JSON.stringify({
+        left: root.offsetLeft,
+        top: root.offsetTop
+      }));
+    } catch (error) {
+      // Position persistence is nice to have; the app should keep working without it.
+    }
+  }
+
+  function applySavedPosition(root, storagePrefix) {
+    const savedPosition = readSavedPosition(storagePrefix);
+
+    if (!savedPosition) {
+      return;
+    }
+
+    const maxLeft = Math.max(viewportPadding, window.innerWidth - root.offsetWidth - viewportPadding);
+    const maxTop = Math.max(viewportPadding, window.innerHeight - root.offsetHeight - viewportPadding);
+    const nextLeft = clamp(Number(savedPosition.left) || viewportPadding, viewportPadding, maxLeft);
+    const nextTop = clamp(Number(savedPosition.top) || viewportPadding, viewportPadding, maxTop);
+
+    root.style.left = `${nextLeft}px`;
+    root.style.top = `${nextTop}px`;
+    root.style.right = 'auto';
+  }
+
   function setWindowState(windowElement, nextState) {
     windowElement.dataset.windowState = nextState;
   }
@@ -22,7 +63,7 @@ const FlipTrackerProWindow = (() => {
     titleButton.setAttribute('aria-label', nextMode === 'compact' ? `Expand ${labels.title}` : `Collapse ${labels.title}`);
   }
 
-  function makeDraggable(windowElement) {
+  function makeDraggable(windowElement, storagePrefix) {
     const titlebar = windowElement.querySelector('[data-window-drag-handle]');
     let dragState = null;
 
@@ -70,18 +111,23 @@ const FlipTrackerProWindow = (() => {
         return;
       }
 
+      savePosition(dragState.root, storagePrefix);
       dragState = null;
       titlebar.releasePointerCapture(event.pointerId);
       delete windowElement.dataset.dragging;
     });
 
     titlebar.addEventListener('pointercancel', () => {
+      if (dragState) {
+        savePosition(dragState.root, storagePrefix);
+      }
+
       dragState = null;
       delete windowElement.dataset.dragging;
     });
   }
 
-  function createWindow({ title, shortTitle = title, version, bodyHtml }) {
+  function createWindow({ title, shortTitle = title, version, bodyHtml, storagePrefix }) {
     const labels = { title, shortTitle };
     const windowElement = createElementFromHtml(`
       <div class="ftp-window" data-window-state="open" data-display-mode="compact">
@@ -122,7 +168,11 @@ const FlipTrackerProWindow = (() => {
       setWindowState(windowElement, 'closed');
     });
 
-    makeDraggable(windowElement);
+    window.requestAnimationFrame(() => {
+      applySavedPosition(windowElement.parentElement, storagePrefix);
+    });
+
+    makeDraggable(windowElement, storagePrefix);
 
     return windowElement;
   }
