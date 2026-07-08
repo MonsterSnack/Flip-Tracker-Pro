@@ -1,73 +1,95 @@
 const FlipTrackerProFlipStore = (() => {
-  function getStorageKey(storagePrefix) {
-    return `${storagePrefix || 'flipTrackerPro'}:flips`;
+  function getStorageService() {
+    return window.FlipTrackerProStorageService;
   }
 
-  function getOpenPurchasesKey(storagePrefix) {
-    return `${storagePrefix || 'flipTrackerPro'}:openPurchases`;
+  function getPurchaseLotService() {
+    return window.FlipTrackerProPurchaseLotService;
   }
 
-  function readList(storageKey) {
-    try {
-      const rawItems = window.localStorage.getItem(storageKey);
-      const items = rawItems ? JSON.parse(rawItems) : [];
-      return Array.isArray(items) ? items : [];
-    } catch (error) {
-      return [];
-    }
+  function getData(storagePrefix) {
+    const storageService = getStorageService();
+    return storageService ? storageService.load(storagePrefix) : { purchaseLots: [], sales: [] };
   }
 
-  function writeList(storageKey, items) {
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(items));
-      return true;
-    } catch (error) {
-      return false;
-    }
+  function normalizeSale(sale) {
+    const storageService = getStorageService();
+    return storageService && typeof storageService.normalizeSale === 'function'
+      ? storageService.normalizeSale(sale)
+      : sale;
+  }
+
+  function normalizeOpenPurchase(purchase) {
+    const storageService = getStorageService();
+    const normalizedLot = storageService && typeof storageService.normalizePurchaseLot === 'function'
+      ? storageService.normalizePurchaseLot(purchase)
+      : purchase;
+
+    return {
+      ...normalizedLot,
+      buyPrice: normalizedLot.unitCost
+    };
   }
 
   function read(storagePrefix) {
-    return readList(getStorageKey(storagePrefix));
+    return getData(storagePrefix).sales;
   }
 
   function write(storagePrefix, flips) {
-    return writeList(getStorageKey(storagePrefix), flips);
+    const storageService = getStorageService();
+
+    if (!storageService) {
+      return false;
+    }
+
+    storageService.update(storagePrefix, (data) => ({
+      ...data,
+      sales: Array.isArray(flips) ? flips.map(normalizeSale) : []
+    }));
+
+    return true;
   }
 
   function readOpenPurchases(storagePrefix) {
-    return readList(getOpenPurchasesKey(storagePrefix));
+    return getData(storagePrefix).purchaseLots.map(normalizeOpenPurchase);
   }
 
   function writeOpenPurchases(storagePrefix, purchases) {
-    return writeList(getOpenPurchasesKey(storagePrefix), purchases);
+    const storageService = getStorageService();
+
+    if (!storageService) {
+      return false;
+    }
+
+    storageService.update(storagePrefix, (data) => ({
+      ...data,
+      purchaseLots: Array.isArray(purchases) ? purchases.map((purchase) => storageService.normalizePurchaseLot(purchase)) : []
+    }));
+
+    return true;
   }
 
   function add(storagePrefix, flip) {
-    const flips = read(storagePrefix);
-    const nextFlip = {
-      ...flip,
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    const storageService = getStorageService();
+    const nextFlip = normalizeSale(flip || {});
 
-    flips.unshift(nextFlip);
-    write(storagePrefix, flips);
+    if (storageService) {
+      storageService.update(storagePrefix, (data) => ({
+        ...data,
+        sales: [nextFlip, ...data.sales]
+      }));
+    }
+
     return nextFlip;
   }
 
   function addOpenPurchase(storagePrefix, purchase) {
-    const purchases = readOpenPurchases(storagePrefix);
-    const nextPurchase = {
-      ...purchase,
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    const purchaseLotService = getPurchaseLotService();
+    const lot = purchaseLotService && typeof purchaseLotService.create === 'function'
+      ? purchaseLotService.create(storagePrefix, purchase)
+      : normalizeOpenPurchase(purchase || {});
 
-    purchases.unshift(nextPurchase);
-    writeOpenPurchases(storagePrefix, purchases);
-    return nextPurchase;
+    return normalizeOpenPurchase(lot);
   }
 
   function find(storagePrefix, flipId) {
@@ -79,45 +101,63 @@ const FlipTrackerProFlipStore = (() => {
   }
 
   function remove(storagePrefix, flipId) {
-    const flips = read(storagePrefix);
-    const nextFlips = flips.filter((flip) => flip.id !== flipId);
-    write(storagePrefix, nextFlips);
-    return nextFlips;
+    const storageService = getStorageService();
+
+    if (!storageService) {
+      return [];
+    }
+
+    const nextData = storageService.update(storagePrefix, (data) => ({
+      ...data,
+      sales: data.sales.filter((flip) => flip.id !== flipId)
+    }));
+
+    return nextData.sales;
   }
 
   function removeOpenPurchase(storagePrefix, purchaseId) {
-    const purchases = readOpenPurchases(storagePrefix);
-    const nextPurchases = purchases.filter((purchase) => purchase.id !== purchaseId);
-    writeOpenPurchases(storagePrefix, nextPurchases);
-    return nextPurchases;
+    const purchaseLotService = getPurchaseLotService();
+
+    if (purchaseLotService && typeof purchaseLotService.remove === 'function') {
+      return purchaseLotService.remove(storagePrefix, purchaseId).map(normalizeOpenPurchase);
+    }
+
+    return [];
   }
 
   function update(storagePrefix, flipId, patch) {
-    const flips = read(storagePrefix);
+    const storageService = getStorageService();
     let updatedFlip = null;
-    const nextFlips = flips.map((flip) => {
-      if (flip.id !== flipId) {
-        return flip;
-      }
 
-      updatedFlip = {
-        ...flip,
-        ...patch,
-        id: flip.id,
-        createdAt: flip.createdAt,
-        updatedAt: new Date().toISOString()
-      };
+    if (!storageService) {
+      return null;
+    }
 
-      return updatedFlip;
-    });
+    storageService.update(storagePrefix, (data) => ({
+      ...data,
+      sales: data.sales.map((flip) => {
+        if (flip.id !== flipId) {
+          return flip;
+        }
 
-    write(storagePrefix, nextFlips);
+        updatedFlip = normalizeSale({
+          ...flip,
+          ...(patch || {}),
+          id: flip.id,
+          createdAt: flip.createdAt,
+          updatedAt: new Date().toISOString()
+        });
+
+        return updatedFlip;
+      })
+    }));
+
     return updatedFlip;
   }
 
   function summarizeOpenPurchases(purchases) {
     const totalInvested = purchases.reduce((total, purchase) => {
-      const buyPrice = Number(purchase.buyPrice) || 0;
+      const buyPrice = Number(purchase.buyPrice || purchase.unitCost) || 0;
       const quantity = Number(purchase.quantity) || 0;
       return total + (buyPrice * quantity);
     }, 0);
