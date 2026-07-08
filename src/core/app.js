@@ -6,6 +6,8 @@
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js
 // @grant        none
 // ==/UserScript==
 
@@ -23,6 +25,7 @@
   };
 
   const config = window.FlipTrackerProConfig || fallbackConfig;
+  const windowShell = window.FlipTrackerProWindow;
 
   const styles = `
     #${config.rootId} {
@@ -42,6 +45,18 @@
       border-radius: 8px;
       background: #111318;
       box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    #${config.rootId} .ftp-window[data-window-state="minimized"] {
+      min-height: 0;
+    }
+
+    #${config.rootId} .ftp-window[data-window-state="minimized"] .ftp-body {
+      display: none;
+    }
+
+    #${config.rootId} .ftp-window[data-window-state="closed"] {
+      display: none;
     }
 
     #${config.rootId} .ftp-titlebar {
@@ -64,6 +79,30 @@
     #${config.rootId} .ftp-version {
       color: #9aa3b2;
       font-size: 12px;
+    }
+
+    #${config.rootId} .ftp-window-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #${config.rootId} .ftp-window-button {
+      width: 26px;
+      height: 24px;
+      border: 1px solid #313744;
+      border-radius: 6px;
+      background: #20242d;
+      color: #f4f6fb;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    #${config.rootId} .ftp-window-button:hover {
+      border-color: #4f8cff;
+      background: #263145;
     }
 
     #${config.rootId} .ftp-body {
@@ -146,38 +185,44 @@
     return root;
   }
 
-  function renderApp(root) {
-    root.innerHTML = `
-      <div class="ftp-window">
-        <header class="ftp-titlebar">
-          <h1 class="ftp-title">${config.appName}</h1>
-          <span class="ftp-version">v${config.version}</span>
-        </header>
+  function getDashboardHtml() {
+    return `
+      <section class="ftp-card">
+        <h2>Dashboard</h2>
+        <p>Your flip tracking workspace is mounted and ready for the next feature module.</p>
+      </section>
 
-        <main class="ftp-body">
-          <section class="ftp-card">
-            <h2>Dashboard</h2>
-            <p>Your flip tracking workspace is mounted and ready for the next feature module.</p>
-          </section>
+      <section class="ftp-stats" aria-label="Trading summary">
+        <div class="ftp-stat">
+          <span>Total profit</span>
+          <strong>$0</strong>
+        </div>
+        <div class="ftp-stat">
+          <span>Active flips</span>
+          <strong>0</strong>
+        </div>
+      </section>
 
-          <section class="ftp-stats" aria-label="Trading summary">
-            <div class="ftp-stat">
-              <span>Total profit</span>
-              <strong>$0</strong>
-            </div>
-            <div class="ftp-stat">
-              <span>Active flips</span>
-              <strong>0</strong>
-            </div>
-          </section>
-
-          <section class="ftp-card">
-            <h2>Status</h2>
-            <p><span class="ftp-status">Online</span> - core app bootstrap loaded successfully.</p>
-          </section>
-        </main>
-      </div>
+      <section class="ftp-card">
+        <h2>Status</h2>
+        <p><span class="ftp-status">Online</span> - core app bootstrap loaded successfully.</p>
+      </section>
     `;
+  }
+
+  function renderApp(root) {
+    root.innerHTML = '';
+
+    if (!windowShell) {
+      root.innerHTML = '<div class="ftp-window"><main class="ftp-body"><section class="ftp-card"><h2>Startup error</h2><p>Window shell failed to load.</p></section></main></div>';
+      return;
+    }
+
+    root.appendChild(windowShell.createWindow({
+      title: config.appName,
+      version: config.version,
+      bodyHtml: getDashboardHtml()
+    }));
   }
 
   function start() {
