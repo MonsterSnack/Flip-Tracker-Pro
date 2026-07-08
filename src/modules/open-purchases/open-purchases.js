@@ -193,12 +193,16 @@ const FlipTrackerProOpenPurchases = (() => {
 
     function findPurchaseLot(purchaseId) {
       if (purchaseLotService && typeof purchaseLotService.find === 'function') {
-        return normalizePurchaseLot(purchaseLotService.find(storagePrefix, purchaseId) || {});
+        const purchaseLot = purchaseLotService.find(storagePrefix, purchaseId);
+        return purchaseLot ? normalizePurchaseLot(purchaseLot) : null;
       }
 
-      return store && typeof store.findOpenPurchase === 'function'
-        ? normalizePurchaseLot(store.findOpenPurchase(storagePrefix, purchaseId) || {})
-        : null;
+      if (store && typeof store.findOpenPurchase === 'function') {
+        const purchaseLot = store.findOpenPurchase(storagePrefix, purchaseId);
+        return purchaseLot ? normalizePurchaseLot(purchaseLot) : null;
+      }
+
+      return null;
     }
 
     function removePurchaseLot(purchaseId) {
@@ -316,8 +320,10 @@ const FlipTrackerProOpenPurchases = (() => {
         }
       });
 
-      updatePreview();
-      sellForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (purchase) {
+        updatePreview();
+        sellForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }
   }
 
