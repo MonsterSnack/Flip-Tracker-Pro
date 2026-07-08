@@ -1,20 +1,20 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.4.1
+// @version      0.4.2
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.4.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.4.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.4.2
 // @grant        none
 // ==/UserScript==
 
@@ -24,7 +24,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.4.1',
+    version: '0.4.2',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -522,8 +522,11 @@
     const summary = getSummary(flips);
     const openSummary = getOpenSummary(openPurchaseItems);
     const dashboardHtml = dashboard && typeof dashboard.render === 'function'
-      ? dashboard.render({ flips, openSummary, summary })
+      ? dashboard.render({ openSummary, summary })
       : '<section class="ftp-card"><h2>Dashboard unavailable</h2><p>The dashboard module did not load.</p></section>';
+    const recentFlipsHtml = dashboard && typeof dashboard.renderRecentFlips === 'function'
+      ? dashboard.renderRecentFlips({ flips })
+      : '<section class="ftp-card"><h2>Recent Flips unavailable</h2><p>The recent flips module did not load.</p></section>';
     const analyticsHtml = analytics && typeof analytics.render === 'function'
       ? analytics.render({ flips })
       : '<section class="ftp-card"><h2>Analytics unavailable</h2><p>The analytics module did not load.</p></section>';
@@ -539,7 +542,7 @@
     const savedFlipsHtml = savedFlips && typeof savedFlips.render === 'function'
       ? savedFlips.render({ flips })
       : '<section class="ftp-card"><h2>Saved flips unavailable</h2><p>The saved flips module did not load.</p></section>';
-    const trackerHtml = `${dashboardHtml}${flipEntryHtml}${openPurchasesHtml}${backupHtml}${savedFlipsHtml}`;
+    const trackerHtml = `${dashboardHtml}${flipEntryHtml}${openPurchasesHtml}${recentFlipsHtml}${backupHtml}${savedFlipsHtml}`;
 
     return `${renderTabs()}${activeView === 'analytics' ? analyticsHtml : trackerHtml}`;
   }
