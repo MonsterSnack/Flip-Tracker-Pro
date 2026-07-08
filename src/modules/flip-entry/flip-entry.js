@@ -42,8 +42,10 @@ const FlipTrackerProFlipEntry = (() => {
   function render() {
     return `
       <section class="ftp-card">
-        <h2>Add Flip</h2>
+        <h2 data-flip-entry-title>Add Flip</h2>
         <form class="ftp-form" data-flip-entry-form>
+          <input name="flipId" type="hidden">
+
           <label class="ftp-field">
             <span>Item</span>
             <input class="ftp-input" name="itemName" type="text" placeholder="Item name" autocomplete="off" required>
@@ -79,7 +81,10 @@ const FlipTrackerProFlipEntry = (() => {
             <small>Margin 0%</small>
           </div>
 
-          <button class="ftp-primary-button" type="submit">Add flip</button>
+          <div class="ftp-form-actions">
+            <button class="ftp-primary-button" type="submit" data-flip-submit-button>Add flip</button>
+            <button class="ftp-secondary-button" type="button" data-flip-cancel-edit hidden>Cancel</button>
+          </div>
         </form>
       </section>
     `;
@@ -92,9 +97,23 @@ const FlipTrackerProFlipEntry = (() => {
       return;
     }
 
+    const card = form.closest('.ftp-card');
+    const title = card.querySelector('[data-flip-entry-title]');
+    const submitButton = form.querySelector('[data-flip-submit-button]');
+    const cancelEditButton = form.querySelector('[data-flip-cancel-edit]');
     const preview = form.querySelector('[data-profit-preview]');
     const previewValue = preview.querySelector('strong');
     const previewMeta = preview.querySelector('small');
+
+    function resetFormMode() {
+      form.reset();
+      form.elements.flipId.value = '';
+      form.elements.quantity.value = '1';
+      title.textContent = 'Add Flip';
+      submitButton.textContent = 'Add flip';
+      cancelEditButton.hidden = true;
+      updatePreview();
+    }
 
     function updatePreview() {
       const result = calculateProfit(form.elements);
@@ -104,6 +123,21 @@ const FlipTrackerProFlipEntry = (() => {
       return result;
     }
 
+    form.loadFlip = (flip) => {
+      form.elements.flipId.value = flip.id;
+      form.elements.itemName.value = flip.itemName || '';
+      form.elements.buyPrice.value = flip.buyPrice || 0;
+      form.elements.sellPrice.value = flip.sellPrice || 0;
+      form.elements.quantity.value = flip.quantity || 1;
+      form.elements.fees.value = flip.fees || 0;
+      title.textContent = 'Edit Flip';
+      submitButton.textContent = 'Update flip';
+      cancelEditButton.hidden = false;
+      updatePreview();
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    cancelEditButton.addEventListener('click', resetFormMode);
     form.addEventListener('input', updatePreview);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -117,14 +151,15 @@ const FlipTrackerProFlipEntry = (() => {
         ...result,
         itemName: form.elements.itemName.value.trim()
       };
+      const flipId = form.elements.flipId.value;
 
-      if (store && typeof store.add === 'function') {
+      if (flipId && store && typeof store.update === 'function') {
+        store.update(storagePrefix, flipId, flip);
+      } else if (store && typeof store.add === 'function') {
         store.add(storagePrefix, flip);
       }
 
-      form.reset();
-      form.elements.quantity.value = '1';
-      updatePreview();
+      resetFormMode();
 
       if (typeof onSave === 'function') {
         onSave();
