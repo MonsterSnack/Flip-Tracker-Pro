@@ -25,7 +25,21 @@ const FlipTrackerProDashboard = (() => {
     `;
   }
 
-  function render({ flips = [], openSummary, summary } = {}) {
+  function renderRecentFlips({ flips = [] } = {}) {
+    const recentFlips = flips.slice(0, 3);
+    const recentHtml = recentFlips.length > 0
+      ? `<ul class="ftp-flip-list">${recentFlips.map(createRecentFlip).join('')}</ul>`
+      : '<p>No flips saved yet. Add your first flip below.</p>';
+
+    return `
+      <section class="ftp-card">
+        <h2>Recent Flips</h2>
+        ${recentHtml}
+      </section>
+    `;
+  }
+
+  function render({ openSummary, summary } = {}) {
     const resolvedSummary = summary || {
       activeFlips: 0,
       successRate: 0,
@@ -37,7 +51,6 @@ const FlipTrackerProDashboard = (() => {
       openQuantity: 0,
       totalInvested: 0
     };
-    const recentFlips = flips.slice(0, 3);
     const stats = [
       createStat('Total profit', formatMoney(resolvedSummary.totalProfit)),
       createStat('Saved flips', String(resolvedSummary.activeFlips)),
@@ -46,9 +59,6 @@ const FlipTrackerProDashboard = (() => {
       createStat('Items tracked', String(resolvedSummary.totalQuantity)),
       createStat('Win rate', `${resolvedSummary.successRate.toFixed(0)}%`)
     ].join('');
-    const recentHtml = recentFlips.length > 0
-      ? `<ul class="ftp-flip-list">${recentFlips.map(createRecentFlip).join('')}</ul>`
-      : '<p>No flips saved yet. Add your first flip below.</p>';
 
     return `
       <section class="ftp-card">
@@ -59,16 +69,12 @@ const FlipTrackerProDashboard = (() => {
       <section class="ftp-stats" aria-label="Trading summary">
         ${stats}
       </section>
-
-      <section class="ftp-card">
-        <h2>Recent Flips</h2>
-        ${recentHtml}
-      </section>
     `;
   }
 
   return {
-    render
+    render,
+    renderRecentFlips
   };
 })();
 
