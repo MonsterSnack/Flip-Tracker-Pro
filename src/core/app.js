@@ -827,8 +827,8 @@
     if (flipEntry && typeof flipEntry.bind === 'function') {
       flipEntry.bind(root, {
         onSave: () => {
-          notify('success', 'Flip saved', 'Your completed flip was saved.');
           renderApp(root);
+          notify('success', 'Flip saved', 'Your completed flip was saved.');
         },
         storagePrefix: config.storagePrefix,
         store: flipStore
@@ -840,8 +840,8 @@
     if (openPurchases && typeof openPurchases.bind === 'function') {
       openPurchases.bind(root, {
         onChange: () => {
-          notify('success', 'Purchases updated', 'Your purchase lots were updated.');
           renderApp(root);
+          notify('success', 'Purchases updated', 'Your purchase lots were updated.');
         },
         storagePrefix: config.storagePrefix,
         store: flipStore
@@ -853,8 +853,8 @@
     if (savedFlips && typeof savedFlips.bind === 'function') {
       savedFlips.bind(root, {
         onDelete: () => {
-          notify('info', 'Flip deleted', 'The saved flip was removed.');
           renderApp(root);
+          notify('info', 'Flip deleted', 'The saved flip was removed.');
         },
         onEdit: (flip) => {
           activeView = 'calculator';
