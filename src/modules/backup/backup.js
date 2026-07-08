@@ -32,13 +32,36 @@ const FlipTrackerProBackup = (() => {
     };
   }
 
-  function getImportedFlips(backup) {
+  function normalizePurchase(purchase) {
+    const now = new Date().toISOString();
+
+    return {
+      ...purchase,
+      id: purchase.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      itemName: String(purchase.itemName || 'Unnamed item'),
+      buyPrice: Number(purchase.buyPrice) || 0,
+      quantity: Number(purchase.quantity) || 1,
+      notes: String(purchase.notes || ''),
+      createdAt: purchase.createdAt || now,
+      updatedAt: purchase.updatedAt || now
+    };
+  }
+
+  function getImportedData(backup) {
     if (Array.isArray(backup)) {
-      return backup.map(normalizeFlip);
+      return {
+        flips: backup.map(normalizeFlip),
+        openPurchases: []
+      };
     }
 
     if (backup && Array.isArray(backup.flips)) {
-      return backup.flips.map(normalizeFlip);
+      return {
+        flips: backup.flips.map(normalizeFlip),
+        openPurchases: Array.isArray(backup.openPurchases)
+          ? backup.openPurchases.map(normalizePurchase)
+          : []
+      };
     }
 
     return null;
@@ -48,7 +71,7 @@ const FlipTrackerProBackup = (() => {
     return `
       <section class="ftp-card" data-backup-section>
         <h2>Backup</h2>
-        <p>Export your saved flips or import a backup file.</p>
+        <p>Export your saved flips and open purchases or import a backup file.</p>
 
         <div class="ftp-form-actions ftp-backup-actions">
           <button class="ftp-secondary-button" type="button" data-export-backup>Export</button>
@@ -86,11 +109,15 @@ const FlipTrackerProBackup = (() => {
         const flips = store && typeof store.read === 'function'
           ? store.read(storagePrefix)
           : [];
+        const openPurchases = store && typeof store.readOpenPurchases === 'function'
+          ? store.readOpenPurchases(storagePrefix)
+          : [];
         const backup = {
           app: 'Flip Tracker Pro',
-          version: '1',
+          version: '2',
           exportedAt: new Date().toISOString(),
-          flips
+          flips,
+          openPurchases
         };
         const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -102,7 +129,7 @@ const FlipTrackerProBackup = (() => {
         link.click();
         link.remove();
         URL.revokeObjectURL(url);
-        setStatus('success', `Exported ${flips.length} saved flip${flips.length === 1 ? '' : 's'}.`);
+        setStatus('success', `Exported ${flips.length} saved flip${flips.length === 1 ? '' : 's'} and ${openPurchases.length} open purchase${openPurchases.length === 1 ? '' : 's'}.`);
       });
     }
 
@@ -119,20 +146,26 @@ const FlipTrackerProBackup = (() => {
 
         reader.addEventListener('load', () => {
           try {
-            const importedFlips = getImportedFlips(JSON.parse(String(reader.result || '')));
+            const importedData = getImportedData(JSON.parse(String(reader.result || '')));
 
-            if (!importedFlips) {
+            if (!importedData) {
               setStatus('error', 'That backup file did not contain saved flips.');
               return;
             }
 
-            if (!window.confirm(`Import ${importedFlips.length} saved flip${importedFlips.length === 1 ? '' : 's'}? This will replace your current saved flips.`)) {
+            const message = `Import ${importedData.flips.length} saved flip${importedData.flips.length === 1 ? '' : 's'} and ${importedData.openPurchases.length} open purchase${importedData.openPurchases.length === 1 ? '' : 's'}? This will replace your current data.`;
+
+            if (!window.confirm(message)) {
               fileInput.value = '';
               return;
             }
 
             if (store && typeof store.write === 'function') {
-              store.write(storagePrefix, importedFlips);
+              store.write(storagePrefix, importedData.flips);
+            }
+
+            if (store && typeof store.writeOpenPurchases === 'function') {
+              store.writeOpenPurchases(storagePrefix, importedData.openPurchases);
             }
 
             fileInput.value = '';
