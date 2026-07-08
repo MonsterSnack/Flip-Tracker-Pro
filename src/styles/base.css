@@ -31,6 +31,18 @@
   box-shadow: var(--ftp-shadow);
 }
 
+.ftp-window[data-window-state="minimized"] {
+  min-height: 0;
+}
+
+.ftp-window[data-window-state="minimized"] .ftp-body {
+  display: none;
+}
+
+.ftp-window[data-window-state="closed"] {
+  display: none;
+}
+
 .ftp-titlebar {
   display: flex;
   align-items: center;
@@ -51,6 +63,30 @@
 .ftp-version {
   color: var(--ftp-muted);
   font-size: 12px;
+}
+
+.ftp-window-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ftp-window-button {
+  width: 26px;
+  height: 24px;
+  border: 1px solid var(--ftp-border);
+  border-radius: 6px;
+  background: var(--ftp-surface-raised);
+  color: var(--ftp-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ftp-window-button:hover {
+  border-color: var(--ftp-accent);
+  background: #263145;
 }
 
 .ftp-body {
