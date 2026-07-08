@@ -1,17 +1,17 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.9
+// @version      0.2.0
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.9
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.9
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.1.9
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.9
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.1.9
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.1.9
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.2.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.2.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.2.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.2.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.2.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.2.0
 // @grant        none
 // ==/UserScript==
 
@@ -21,7 +21,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.1.9',
+    version: '0.2.0',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -270,6 +270,11 @@
       justify-items: end;
     }
 
+    #${config.rootId} .ftp-row-actions {
+      display: flex;
+      gap: 6px;
+    }
+
     #${config.rootId} [data-profit-state="positive"] {
       color: #3ecf8e;
     }
@@ -288,6 +293,12 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+    }
+
+    #${config.rootId} .ftp-form-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
 
     #${config.rootId} .ftp-field {
@@ -338,6 +349,7 @@
     }
 
     #${config.rootId} .ftp-primary-button,
+    #${config.rootId} .ftp-secondary-button,
     #${config.rootId} .ftp-danger-button {
       border: 0;
       border-radius: 6px;
@@ -355,6 +367,15 @@
 
     #${config.rootId} .ftp-primary-button:hover {
       background: #2f6ee8;
+    }
+
+    #${config.rootId} .ftp-secondary-button {
+      background: #313744;
+      color: #f4f6fb;
+    }
+
+    #${config.rootId} .ftp-secondary-button:hover {
+      background: #3d4657;
     }
 
     #${config.rootId} .ftp-danger-button {
@@ -434,6 +455,13 @@
     if (savedFlips && typeof savedFlips.bind === 'function') {
       savedFlips.bind(root, {
         onDelete: () => renderApp(root),
+        onEdit: (flip) => {
+          const form = root.querySelector('[data-flip-entry-form]');
+
+          if (form && typeof form.loadFlip === 'function') {
+            form.loadFlip(flip);
+          }
+        },
         storagePrefix: config.storagePrefix,
         store: flipStore
       });
