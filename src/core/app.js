@@ -1,20 +1,20 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.4.0
+// @version      0.4.1
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.4.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.4.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.4.1
 // @grant        none
 // ==/UserScript==
 
@@ -24,7 +24,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.4.0',
+    version: '0.4.1',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -42,6 +42,8 @@
   const openPurchases = window.FlipTrackerProOpenPurchases;
   const backup = window.FlipTrackerProBackup;
   const savedFlips = window.FlipTrackerProSavedFlips;
+  const activeViewKey = `${config.storagePrefix}:activeView`;
+  let activeView = window.localStorage.getItem(activeViewKey) || 'tracker';
 
   const styles = `
     #${config.rootId} {
@@ -165,7 +167,9 @@
 
     #${config.rootId} .ftp-window-actions,
     #${config.rootId} .ftp-flip-row,
-    #${config.rootId} .ftp-row-actions {
+    #${config.rootId} .ftp-row-actions,
+    #${config.rootId} .ftp-tabs,
+    #${config.rootId} .ftp-chart-label {
       display: flex;
       align-items: center;
     }
@@ -198,6 +202,30 @@
       max-height: 560px;
       overflow-y: auto;
       padding: 14px;
+    }
+
+    #${config.rootId} .ftp-tabs {
+      gap: 6px;
+    }
+
+    #${config.rootId} .ftp-tab-button {
+      flex: 1;
+      border: 1px solid #313744;
+      border-radius: 6px;
+      background: #181b22;
+      color: #9aa3b2;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px;
+    }
+
+    #${config.rootId} .ftp-tab-button:hover,
+    #${config.rootId} .ftp-tab-button[data-active="true"] {
+      border-color: #4f8cff;
+      background: #263145;
+      color: #f4f6fb;
     }
 
     #${config.rootId} .ftp-card,
@@ -306,8 +334,6 @@
     }
 
     #${config.rootId} .ftp-chart-label {
-      display: flex;
-      align-items: center;
       justify-content: space-between;
       gap: 8px;
     }
@@ -481,6 +507,15 @@
       : undefined;
   }
 
+  function renderTabs() {
+    return `
+      <nav class="ftp-tabs" aria-label="Flip Tracker sections">
+        <button class="ftp-tab-button" type="button" data-view-tab="tracker" data-active="${activeView === 'tracker'}">Tracker</button>
+        <button class="ftp-tab-button" type="button" data-view-tab="analytics" data-active="${activeView === 'analytics'}">Analytics</button>
+      </nav>
+    `;
+  }
+
   function getAppHtml() {
     const flips = getSavedFlips();
     const openPurchaseItems = getOpenPurchases();
@@ -504,11 +539,28 @@
     const savedFlipsHtml = savedFlips && typeof savedFlips.render === 'function'
       ? savedFlips.render({ flips })
       : '<section class="ftp-card"><h2>Saved flips unavailable</h2><p>The saved flips module did not load.</p></section>';
+    const trackerHtml = `${dashboardHtml}${flipEntryHtml}${openPurchasesHtml}${backupHtml}${savedFlipsHtml}`;
 
-    return `${dashboardHtml}${analyticsHtml}${flipEntryHtml}${openPurchasesHtml}${backupHtml}${savedFlipsHtml}`;
+    return `${renderTabs()}${activeView === 'analytics' ? analyticsHtml : trackerHtml}`;
+  }
+
+  function bindTabs(root) {
+    root.querySelectorAll('[data-view-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        activeView = button.dataset.viewTab || 'tracker';
+        window.localStorage.setItem(activeViewKey, activeView);
+        renderApp(root);
+      });
+    });
   }
 
   function bindModules(root) {
+    bindTabs(root);
+
+    if (activeView !== 'tracker') {
+      return;
+    }
+
     if (flipEntry && typeof flipEntry.bind === 'function') {
       flipEntry.bind(root, {
         onSave: () => renderApp(root),
