@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.1
+// @version      0.1.2
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.2
 // @grant        none
 // ==/UserScript==
 
@@ -16,7 +16,8 @@
 
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
-    version: '0.1.1',
+    shortName: 'FTP',
+    version: '0.1.2',
     rootId: 'flip-tracker-pro-root',
     defaultWindow: {
       top: 96,
@@ -38,13 +39,44 @@
     }
 
     #${config.rootId} .ftp-window {
-      width: 420px;
-      min-height: 520px;
+      width: 360px;
+      min-height: 480px;
       overflow: hidden;
       border: 1px solid #313744;
       border-radius: 8px;
       background: #111318;
       box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    #${config.rootId} .ftp-window[data-display-mode="compact"] {
+      width: 58px;
+      min-height: 44px;
+    }
+
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-titlebar {
+      justify-content: center;
+      width: 58px;
+      height: 44px;
+      padding: 0;
+      border-bottom: 0;
+    }
+
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-title-group {
+      width: 100%;
+      height: 100%;
+    }
+
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-title-button {
+      width: 100%;
+      height: 100%;
+      justify-content: center;
+      font-size: 15px;
+    }
+
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-version,
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-window-actions,
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-body {
+      display: none;
     }
 
     #${config.rootId} .ftp-window[data-window-state="minimized"] {
@@ -76,12 +108,30 @@
       user-select: none;
     }
 
-    #${config.rootId} .ftp-title {
-      margin: 0;
+    #${config.rootId} .ftp-title-group {
+      display: grid;
+      gap: 1px;
+    }
+
+    #${config.rootId} .ftp-title-button {
+      display: flex;
+      align-items: center;
+      width: fit-content;
+      border: 0;
+      background: transparent;
+      color: #f4f6fb;
+      cursor: pointer;
+      font: inherit;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0;
       line-height: 1.15;
+      padding: 0;
+      text-align: left;
+    }
+
+    #${config.rootId} .ftp-title-button:hover {
+      color: #4f8cff;
     }
 
     #${config.rootId} .ftp-version {
@@ -215,7 +265,7 @@
 
       <section class="ftp-card">
         <h2>Status</h2>
-        <p><span class="ftp-status">Online</span> - core app bootstrap loaded successfully. Drag the title bar to move this window.</p>
+        <p><span class="ftp-status">Online</span> - click the title to collapse back to FTP.</p>
       </section>
     `;
   }
@@ -230,6 +280,7 @@
 
     root.appendChild(windowShell.createWindow({
       title: config.appName,
+      shortTitle: config.shortName || 'FTP',
       version: config.version,
       bodyHtml: getDashboardHtml()
     }));
