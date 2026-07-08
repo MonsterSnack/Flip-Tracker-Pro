@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.0
+// @version      0.1.1
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.1
 // @grant        none
 // ==/UserScript==
 
@@ -16,7 +16,7 @@
 
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
-    version: '0.1.0',
+    version: '0.1.1',
     rootId: 'flip-tracker-pro-root',
     defaultWindow: {
       top: 96,
@@ -212,7 +212,7 @@
 
       <section class="ftp-card">
         <h2>Status</h2>
-        <p><span class="ftp-status">Online</span> - core app bootstrap loaded successfully.</p>
+        <p><span class="ftp-status">Online</span> - core app bootstrap loaded successfully. Drag the title bar to move this window.</p>
       </section>
     `;
   }
