@@ -1,18 +1,19 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.2.2
+// @version      0.3.0
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.2.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.2.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.2.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.2.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.2.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.2.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.2.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.3.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.3.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.3.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.3.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.3.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.3.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.3.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.3.0
 // @grant        none
 // ==/UserScript==
 
@@ -22,7 +23,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.2.2',
+    version: '0.3.0',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -36,6 +37,7 @@
   const flipStore = window.FlipTrackerProFlipStore;
   const dashboard = window.FlipTrackerProDashboard;
   const flipEntry = window.FlipTrackerProFlipEntry;
+  const openPurchases = window.FlipTrackerProOpenPurchases;
   const backup = window.FlipTrackerProBackup;
   const savedFlips = window.FlipTrackerProSavedFlips;
 
@@ -224,7 +226,8 @@
     }
 
     #${config.rootId} [data-saved-flips-controls],
-    #${config.rootId} .ftp-backup-actions {
+    #${config.rootId} .ftp-backup-actions,
+    #${config.rootId} .ftp-subheading {
       margin-top: 10px;
     }
 
@@ -418,21 +421,38 @@
       : [];
   }
 
+  function getOpenPurchases() {
+    return flipStore && typeof flipStore.readOpenPurchases === 'function'
+      ? flipStore.readOpenPurchases(config.storagePrefix)
+      : [];
+  }
+
   function getSummary(flips) {
     return flipStore && typeof flipStore.summarize === 'function'
       ? flipStore.summarize(flips)
       : undefined;
   }
 
+  function getOpenSummary(openPurchaseItems) {
+    return flipStore && typeof flipStore.summarizeOpenPurchases === 'function'
+      ? flipStore.summarizeOpenPurchases(openPurchaseItems)
+      : undefined;
+  }
+
   function getAppHtml() {
     const flips = getSavedFlips();
+    const openPurchaseItems = getOpenPurchases();
     const summary = getSummary(flips);
+    const openSummary = getOpenSummary(openPurchaseItems);
     const dashboardHtml = dashboard && typeof dashboard.render === 'function'
-      ? dashboard.render({ flips, summary })
+      ? dashboard.render({ flips, openSummary, summary })
       : '<section class="ftp-card"><h2>Dashboard unavailable</h2><p>The dashboard module did not load.</p></section>';
     const flipEntryHtml = flipEntry && typeof flipEntry.render === 'function'
       ? flipEntry.render()
       : '<section class="ftp-card"><h2>Flip form unavailable</h2><p>The flip entry module did not load.</p></section>';
+    const openPurchasesHtml = openPurchases && typeof openPurchases.render === 'function'
+      ? openPurchases.render({ purchases: openPurchaseItems })
+      : '<section class="ftp-card"><h2>Open purchases unavailable</h2><p>The open purchases module did not load.</p></section>';
     const backupHtml = backup && typeof backup.render === 'function'
       ? backup.render()
       : '<section class="ftp-card"><h2>Backup unavailable</h2><p>The backup module did not load.</p></section>';
@@ -440,13 +460,21 @@
       ? savedFlips.render({ flips })
       : '<section class="ftp-card"><h2>Saved flips unavailable</h2><p>The saved flips module did not load.</p></section>';
 
-    return `${dashboardHtml}${flipEntryHtml}${backupHtml}${savedFlipsHtml}`;
+    return `${dashboardHtml}${flipEntryHtml}${openPurchasesHtml}${backupHtml}${savedFlipsHtml}`;
   }
 
   function bindModules(root) {
     if (flipEntry && typeof flipEntry.bind === 'function') {
       flipEntry.bind(root, {
         onSave: () => renderApp(root),
+        storagePrefix: config.storagePrefix,
+        store: flipStore
+      });
+    }
+
+    if (openPurchases && typeof openPurchases.bind === 'function') {
+      openPurchases.bind(root, {
+        onChange: () => renderApp(root),
         storagePrefix: config.storagePrefix,
         store: flipStore
       });
