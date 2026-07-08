@@ -21,7 +21,17 @@ const FlipTrackerProWindow = (() => {
     return `${storagePrefix || 'flipTrackerPro'}:windowPosition`;
   }
 
+  function getStorageService() {
+    return window.FlipTrackerProStorageService;
+  }
+
   function readSavedState(storagePrefix) {
+    const storageService = getStorageService();
+
+    if (storageService && typeof storageService.load === 'function') {
+      return storageService.load(storagePrefix).windowState || null;
+    }
+
     try {
       const rawState = window.localStorage.getItem(getStorageKey(storagePrefix));
       const rawLegacyPosition = window.localStorage.getItem(getLegacyPositionKey(storagePrefix));
@@ -59,14 +69,24 @@ const FlipTrackerProWindow = (() => {
     const windowRect = windowElement.getBoundingClientRect();
     const savedState = readSavedState(storagePrefix) || {};
     const isCompact = windowElement.dataset.displayMode === 'compact';
+    const nextState = {
+      height: isCompact ? savedState.height : Math.round(windowRect.height),
+      left: Math.round(rootRect.left),
+      top: Math.round(rootRect.top),
+      width: isCompact ? savedState.width : Math.round(windowRect.width)
+    };
+    const storageService = getStorageService();
+
+    if (storageService && typeof storageService.update === 'function') {
+      storageService.update(storagePrefix, (data) => ({
+        ...data,
+        windowState: nextState
+      }));
+      return;
+    }
 
     try {
-      window.localStorage.setItem(getStorageKey(storagePrefix), JSON.stringify({
-        height: isCompact ? savedState.height : Math.round(windowRect.height),
-        left: Math.round(rootRect.left),
-        top: Math.round(rootRect.top),
-        width: isCompact ? savedState.width : Math.round(windowRect.width)
-      }));
+      window.localStorage.setItem(getStorageKey(storagePrefix), JSON.stringify(nextState));
     } catch (error) {
       // Window state persistence is nice to have; the app should keep working without it.
     }
