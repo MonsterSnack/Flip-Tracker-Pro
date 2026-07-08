@@ -1,15 +1,16 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.7
+// @version      0.1.8
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.7
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.7
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.7
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.1.7
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.8
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.8
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.1.8
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.8
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.1.8
 // @grant        none
 // ==/UserScript==
 
@@ -19,7 +20,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.1.7',
+    version: '0.1.8',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -30,6 +31,7 @@
 
   const config = window.FlipTrackerProConfig || fallbackConfig;
   const windowShell = window.FlipTrackerProWindow;
+  const flipStore = window.FlipTrackerProFlipStore;
   const dashboard = window.FlipTrackerProDashboard;
   const flipEntry = window.FlipTrackerProFlipEntry;
 
@@ -220,6 +222,34 @@
       font-size: 18px;
     }
 
+    #${config.rootId} .ftp-flip-list {
+      display: grid;
+      gap: 6px;
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 0;
+    }
+
+    #${config.rootId} .ftp-flip-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid #313744;
+      border-radius: 6px;
+      background: #181b22;
+      font-size: 12px;
+      padding: 8px;
+    }
+
+    #${config.rootId} [data-profit-state="positive"] {
+      color: #3ecf8e;
+    }
+
+    #${config.rootId} [data-profit-state="negative"] {
+      color: #ff6b6b;
+    }
+
     #${config.rootId} .ftp-form {
       display: grid;
       gap: 10px;
@@ -279,14 +309,6 @@
       font-size: 20px;
     }
 
-    #${config.rootId} .ftp-profit-preview strong[data-profit-state="positive"] {
-      color: #3ecf8e;
-    }
-
-    #${config.rootId} .ftp-profit-preview strong[data-profit-state="negative"] {
-      color: #ff6b6b;
-    }
-
     #${config.rootId} .ftp-primary-button {
       border: 0;
       border-radius: 6px;
@@ -329,15 +351,39 @@
     return root;
   }
 
+  function getSavedFlips() {
+    return flipStore && typeof flipStore.read === 'function'
+      ? flipStore.read(config.storagePrefix)
+      : [];
+  }
+
+  function getSummary(flips) {
+    return flipStore && typeof flipStore.summarize === 'function'
+      ? flipStore.summarize(flips)
+      : undefined;
+  }
+
   function getAppHtml() {
+    const flips = getSavedFlips();
+    const summary = getSummary(flips);
     const dashboardHtml = dashboard && typeof dashboard.render === 'function'
-      ? dashboard.render()
+      ? dashboard.render({ flips, summary })
       : '<section class="ftp-card"><h2>Dashboard unavailable</h2><p>The dashboard module did not load.</p></section>';
     const flipEntryHtml = flipEntry && typeof flipEntry.render === 'function'
       ? flipEntry.render()
       : '<section class="ftp-card"><h2>Flip form unavailable</h2><p>The flip entry module did not load.</p></section>';
 
     return `${dashboardHtml}${flipEntryHtml}`;
+  }
+
+  function bindModules(root) {
+    if (flipEntry && typeof flipEntry.bind === 'function') {
+      flipEntry.bind(root, {
+        onSave: () => renderApp(root),
+        storagePrefix: config.storagePrefix,
+        store: flipStore
+      });
+    }
   }
 
   function renderApp(root) {
@@ -358,10 +404,7 @@
 
     root.appendChild(appWindow);
     windowShell.restorePosition(root, config.storagePrefix);
-
-    if (flipEntry && typeof flipEntry.bind === 'function') {
-      flipEntry.bind(root);
-    }
+    bindModules(root);
   }
 
   function start() {
