@@ -1,19 +1,20 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.3.2
+// @version      0.4.0
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.3.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.3.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.3.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.3.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.3.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.3.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.3.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.3.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.4.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.4.0
 // @grant        none
 // ==/UserScript==
 
@@ -23,7 +24,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.3.2',
+    version: '0.4.0',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -36,6 +37,7 @@
   const windowShell = window.FlipTrackerProWindow;
   const flipStore = window.FlipTrackerProFlipStore;
   const dashboard = window.FlipTrackerProDashboard;
+  const analytics = window.FlipTrackerProAnalytics;
   const flipEntry = window.FlipTrackerProFlipEntry;
   const openPurchases = window.FlipTrackerProOpenPurchases;
   const backup = window.FlipTrackerProBackup;
@@ -225,6 +227,10 @@
       gap: 10px;
     }
 
+    #${config.rootId} .ftp-analytics-stats {
+      grid-template-columns: 1fr;
+    }
+
     #${config.rootId} [data-saved-flips-controls],
     #${config.rootId} .ftp-backup-actions,
     #${config.rootId} .ftp-subheading {
@@ -255,7 +261,9 @@
     }
 
     #${config.rootId} .ftp-flip-list,
-    #${config.rootId} .ftp-saved-flips {
+    #${config.rootId} .ftp-saved-flips,
+    #${config.rootId} .ftp-chart-list {
+      display: grid;
       gap: 6px;
       list-style: none;
       margin: 8px 0 0;
@@ -263,7 +271,8 @@
     }
 
     #${config.rootId} .ftp-flip-row,
-    #${config.rootId} .ftp-saved-flip {
+    #${config.rootId} .ftp-saved-flip,
+    #${config.rootId} .ftp-chart-row {
       border: 1px solid #313744;
       border-radius: 6px;
       background: #181b22;
@@ -283,7 +292,8 @@
 
     #${config.rootId} .ftp-saved-flip-main,
     #${config.rootId} .ftp-saved-flip-side,
-    #${config.rootId} .ftp-field {
+    #${config.rootId} .ftp-field,
+    #${config.rootId} .ftp-chart-row {
       gap: 5px;
     }
 
@@ -293,6 +303,38 @@
 
     #${config.rootId} .ftp-row-actions {
       gap: 6px;
+    }
+
+    #${config.rootId} .ftp-chart-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    #${config.rootId} .ftp-chart-label span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #${config.rootId} .ftp-chart-track {
+      overflow: hidden;
+      height: 8px;
+      border-radius: 999px;
+      background: #111318;
+    }
+
+    #${config.rootId} .ftp-chart-bar {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: #3ecf8e;
+    }
+
+    #${config.rootId} .ftp-chart-bar[data-profit-state="negative"] {
+      background: #ff6b6b;
     }
 
     #${config.rootId} [data-profit-state="positive"],
@@ -447,6 +489,9 @@
     const dashboardHtml = dashboard && typeof dashboard.render === 'function'
       ? dashboard.render({ flips, openSummary, summary })
       : '<section class="ftp-card"><h2>Dashboard unavailable</h2><p>The dashboard module did not load.</p></section>';
+    const analyticsHtml = analytics && typeof analytics.render === 'function'
+      ? analytics.render({ flips })
+      : '<section class="ftp-card"><h2>Analytics unavailable</h2><p>The analytics module did not load.</p></section>';
     const flipEntryHtml = flipEntry && typeof flipEntry.render === 'function'
       ? flipEntry.render()
       : '<section class="ftp-card"><h2>Flip form unavailable</h2><p>The flip entry module did not load.</p></section>';
@@ -460,7 +505,7 @@
       ? savedFlips.render({ flips })
       : '<section class="ftp-card"><h2>Saved flips unavailable</h2><p>The saved flips module did not load.</p></section>';
 
-    return `${dashboardHtml}${flipEntryHtml}${openPurchasesHtml}${backupHtml}${savedFlipsHtml}`;
+    return `${dashboardHtml}${analyticsHtml}${flipEntryHtml}${openPurchasesHtml}${backupHtml}${savedFlipsHtml}`;
   }
 
   function bindModules(root) {
