@@ -1,4 +1,14 @@
 const FlipTrackerProOpenPurchases = (() => {
+  function escapeHtml(value) {
+    return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
+      ? window.FlipTrackerProHtml.escapeHtml(value)
+      : String(value ?? '');
+  }
+
+  function getPurchaseLotService() {
+    return window.FlipTrackerProPurchaseLotService;
+  }
+
   function parseMoney(value) {
     const parsedValue = Number.parseFloat(String(value || '').replace(/,/g, ''));
     return Number.isFinite(parsedValue) ? parsedValue : 0;
@@ -17,9 +27,23 @@ const FlipTrackerProOpenPurchases = (() => {
     }).format(value || 0);
   }
 
-  function calculateSoldFlip(purchase, sellPrice, fees) {
-    const quantity = Number(purchase.quantity) || 1;
-    const buyPrice = Number(purchase.buyPrice) || 0;
+  function normalizePurchaseLot(purchaseLot) {
+    const unitCost = Number(purchaseLot.unitCost ?? purchaseLot.buyPrice) || 0;
+    const quantity = Number(purchaseLot.quantity) || 1;
+
+    return {
+      ...purchaseLot,
+      buyPrice: unitCost,
+      quantity,
+      totalCost: Number(purchaseLot.totalCost) || unitCost * quantity,
+      unitCost
+    };
+  }
+
+  function calculateSoldFlip(purchaseLot, sellPrice, fees) {
+    const normalizedLot = normalizePurchaseLot(purchaseLot);
+    const quantity = Number(normalizedLot.quantity) || 1;
+    const buyPrice = Number(normalizedLot.unitCost) || 0;
     const totalBuy = buyPrice * quantity;
     const totalSell = sellPrice * quantity;
     const profit = totalSell - totalBuy - fees;
@@ -28,10 +52,10 @@ const FlipTrackerProOpenPurchases = (() => {
     return {
       buyPrice,
       fees,
-      itemName: purchase.itemName || 'Unnamed item',
+      itemName: normalizedLot.itemName || 'Unnamed item',
       margin,
-      notes: purchase.notes || '',
-      openedAt: purchase.createdAt,
+      notes: normalizedLot.notes || '',
+      openedAt: normalizedLot.createdAt,
       profit,
       quantity,
       sellPrice,
@@ -40,38 +64,42 @@ const FlipTrackerProOpenPurchases = (() => {
     };
   }
 
-  function renderPurchase(purchase) {
-    const quantity = Number(purchase.quantity) || 1;
-    const buyPrice = Number(purchase.buyPrice) || 0;
-    const totalBuy = buyPrice * quantity;
+  function renderPurchase(purchaseLot) {
+    const normalizedLot = normalizePurchaseLot(purchaseLot);
+    const quantity = Number(normalizedLot.quantity) || 1;
+    const unitCost = Number(normalizedLot.unitCost) || 0;
+    const totalCost = Number(normalizedLot.totalCost) || unitCost * quantity;
+    const purchaseId = escapeHtml(normalizedLot.id);
+    const itemName = escapeHtml(normalizedLot.itemName || 'Unnamed item');
+    const notes = escapeHtml(normalizedLot.notes || '');
 
     return `
-      <li class="ftp-saved-flip" data-open-purchase-id="${purchase.id}">
+      <li class="ftp-saved-flip" data-open-purchase-id="${purchaseId}">
         <div class="ftp-saved-flip-main">
-          <strong>${purchase.itemName || 'Unnamed item'}</strong>
-          <span>Buy ${formatMoney(buyPrice)} / Qty ${quantity} / Invested ${formatMoney(totalBuy)}</span>
-          ${purchase.notes ? `<span>${purchase.notes}</span>` : ''}
+          <strong>${itemName}</strong>
+          <span>Buy ${formatMoney(unitCost)} / Qty ${quantity} / Invested ${formatMoney(totalCost)}</span>
+          ${notes ? `<span>${notes}</span>` : ''}
         </div>
 
         <div class="ftp-saved-flip-side">
-          <strong>${formatMoney(totalBuy)}</strong>
+          <strong>${formatMoney(totalCost)}</strong>
           <div class="ftp-row-actions">
-            <button class="ftp-secondary-button" type="button" data-sell-purchase="${purchase.id}">Mark sold</button>
-            <button class="ftp-danger-button" type="button" data-delete-purchase="${purchase.id}">Delete</button>
+            <button class="ftp-secondary-button" type="button" data-sell-purchase="${purchaseId}">Mark sold</button>
+            <button class="ftp-danger-button" type="button" data-delete-purchase="${purchaseId}">Delete</button>
           </div>
         </div>
       </li>
     `;
   }
 
-  function renderSellForm(purchase) {
-    if (!purchase) {
+  function renderSellForm(purchaseLot) {
+    if (!purchaseLot) {
       return '';
     }
 
     return `
-      <form class="ftp-form" data-open-purchase-sell-form data-purchase-id="${purchase.id}">
-        <h2>Mark Sold: ${purchase.itemName || 'Unnamed item'}</h2>
+      <form class="ftp-form" data-open-purchase-sell-form data-purchase-id="${escapeHtml(purchaseLot.id)}">
+        <h2>Mark Sold: ${escapeHtml(purchaseLot.itemName || 'Unnamed item')}</h2>
 
         <div class="ftp-form-grid">
           <label class="ftp-field">
@@ -99,10 +127,11 @@ const FlipTrackerProOpenPurchases = (() => {
     `;
   }
 
-  function render({ purchases = [], selectedPurchaseId = '' } = {}) {
-    const selectedPurchase = purchases.find((purchase) => purchase.id === selectedPurchaseId) || null;
-    const listHtml = purchases.length > 0
-      ? `<ul class="ftp-saved-flips">${purchases.map(renderPurchase).join('')}</ul>`
+  function render({ purchaseLots, purchases = purchaseLots || [], selectedPurchaseId = '' } = {}) {
+    const lots = purchases.map(normalizePurchaseLot);
+    const selectedPurchase = lots.find((purchase) => purchase.id === selectedPurchaseId) || null;
+    const listHtml = lots.length > 0
+      ? `<ul class="ftp-saved-flips">${lots.map(renderPurchase).join('')}</ul>`
       : '<p>No open purchases yet.</p>';
 
     return `
@@ -146,20 +175,46 @@ const FlipTrackerProOpenPurchases = (() => {
 
   function bind(root, { onChange, storagePrefix, store } = {}) {
     const section = root.querySelector('[data-open-purchases-section]');
+    const purchaseLotService = getPurchaseLotService();
 
     if (!section) {
       return;
     }
 
-    function getPurchases() {
+    function getPurchaseLots() {
+      if (purchaseLotService && typeof purchaseLotService.list === 'function') {
+        return purchaseLotService.list(storagePrefix).map(normalizePurchaseLot);
+      }
+
       return store && typeof store.readOpenPurchases === 'function'
-        ? store.readOpenPurchases(storagePrefix)
+        ? store.readOpenPurchases(storagePrefix).map(normalizePurchaseLot)
         : [];
+    }
+
+    function findPurchaseLot(purchaseId) {
+      if (purchaseLotService && typeof purchaseLotService.find === 'function') {
+        return normalizePurchaseLot(purchaseLotService.find(storagePrefix, purchaseId) || {});
+      }
+
+      return store && typeof store.findOpenPurchase === 'function'
+        ? normalizePurchaseLot(store.findOpenPurchase(storagePrefix, purchaseId) || {})
+        : null;
+    }
+
+    function removePurchaseLot(purchaseId) {
+      if (purchaseLotService && typeof purchaseLotService.remove === 'function') {
+        purchaseLotService.remove(storagePrefix, purchaseId);
+        return;
+      }
+
+      if (store && typeof store.removeOpenPurchase === 'function') {
+        store.removeOpenPurchase(storagePrefix, purchaseId);
+      }
     }
 
     function renderSection(selectedPurchaseId = '') {
       section.outerHTML = render({
-        purchases: getPurchases(),
+        purchases: getPurchaseLots(),
         selectedPurchaseId
       });
       bind(root, { onChange, storagePrefix, store });
@@ -176,13 +231,18 @@ const FlipTrackerProOpenPurchases = (() => {
           return;
         }
 
-        if (store && typeof store.addOpenPurchase === 'function') {
-          store.addOpenPurchase(storagePrefix, {
-            buyPrice: parseMoney(addForm.elements.buyPrice.value),
-            itemName: addForm.elements.itemName.value.trim(),
-            notes: addForm.elements.notes.value.trim(),
-            quantity: parseQuantity(addForm.elements.quantity.value)
-          });
+        const purchaseLot = {
+          itemName: addForm.elements.itemName.value.trim(),
+          notes: addForm.elements.notes.value.trim(),
+          quantity: parseQuantity(addForm.elements.quantity.value),
+          source: 'manual',
+          unitCost: parseMoney(addForm.elements.buyPrice.value)
+        };
+
+        if (purchaseLotService && typeof purchaseLotService.create === 'function') {
+          purchaseLotService.create(storagePrefix, purchaseLot);
+        } else if (store && typeof store.addOpenPurchase === 'function') {
+          store.addOpenPurchase(storagePrefix, purchaseLot);
         }
 
         if (typeof onChange === 'function') {
@@ -197,18 +257,14 @@ const FlipTrackerProOpenPurchases = (() => {
 
     section.querySelectorAll('[data-delete-purchase]').forEach((button) => {
       button.addEventListener('click', () => {
-        const purchase = store && typeof store.findOpenPurchase === 'function'
-          ? store.findOpenPurchase(storagePrefix, button.dataset.deletePurchase)
-          : null;
+        const purchase = findPurchaseLot(button.dataset.deletePurchase);
         const itemName = purchase && purchase.itemName ? purchase.itemName : 'this open purchase';
 
         if (!window.confirm(`Delete ${itemName}? This cannot be undone.`)) {
           return;
         }
 
-        if (store && typeof store.removeOpenPurchase === 'function') {
-          store.removeOpenPurchase(storagePrefix, button.dataset.deletePurchase);
-        }
+        removePurchaseLot(button.dataset.deletePurchase);
 
         if (typeof onChange === 'function') {
           onChange();
@@ -223,9 +279,7 @@ const FlipTrackerProOpenPurchases = (() => {
     }
 
     if (sellForm) {
-      const purchase = store && typeof store.findOpenPurchase === 'function'
-        ? store.findOpenPurchase(storagePrefix, sellForm.dataset.purchaseId)
-        : null;
+      const purchase = findPurchaseLot(sellForm.dataset.purchaseId);
       const preview = sellForm.querySelector('[data-open-sell-preview]');
       const previewValue = preview.querySelector('strong');
       const previewMeta = preview.querySelector('small');
@@ -255,9 +309,7 @@ const FlipTrackerProOpenPurchases = (() => {
           store.add(storagePrefix, updatePreview());
         }
 
-        if (store && typeof store.removeOpenPurchase === 'function') {
-          store.removeOpenPurchase(storagePrefix, purchase.id);
-        }
+        removePurchaseLot(purchase.id);
 
         if (typeof onChange === 'function') {
           onChange();
