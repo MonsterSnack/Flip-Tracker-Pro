@@ -1,16 +1,17 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.1.8
+// @version      0.1.9
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.8
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.8
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.1.8
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.8
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.1.8
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.1.9
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.1.9
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.1.9
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.1.9
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.1.9
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.1.9
 // @grant        none
 // ==/UserScript==
 
@@ -20,7 +21,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FTP',
-    version: '0.1.8',
+    version: '0.1.9',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
@@ -34,6 +35,7 @@
   const flipStore = window.FlipTrackerProFlipStore;
   const dashboard = window.FlipTrackerProDashboard;
   const flipEntry = window.FlipTrackerProFlipEntry;
+  const savedFlips = window.FlipTrackerProSavedFlips;
 
   const styles = `
     #${config.rootId} {
@@ -222,7 +224,8 @@
       font-size: 18px;
     }
 
-    #${config.rootId} .ftp-flip-list {
+    #${config.rootId} .ftp-flip-list,
+    #${config.rootId} .ftp-saved-flips {
       display: grid;
       gap: 6px;
       list-style: none;
@@ -230,16 +233,41 @@
       padding: 0;
     }
 
-    #${config.rootId} .ftp-flip-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
+    #${config.rootId} .ftp-flip-row,
+    #${config.rootId} .ftp-saved-flip {
       border: 1px solid #313744;
       border-radius: 6px;
       background: #181b22;
       font-size: 12px;
       padding: 8px;
+    }
+
+    #${config.rootId} .ftp-flip-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    #${config.rootId} .ftp-saved-flip {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+    }
+
+    #${config.rootId} .ftp-saved-flip-main,
+    #${config.rootId} .ftp-saved-flip-side {
+      display: grid;
+      gap: 4px;
+    }
+
+    #${config.rootId} .ftp-saved-flip-main span {
+      color: #9aa3b2;
+      font-size: 11px;
+    }
+
+    #${config.rootId} .ftp-saved-flip-side {
+      justify-items: end;
     }
 
     #${config.rootId} [data-profit-state="positive"] {
@@ -309,10 +337,10 @@
       font-size: 20px;
     }
 
-    #${config.rootId} .ftp-primary-button {
+    #${config.rootId} .ftp-primary-button,
+    #${config.rootId} .ftp-danger-button {
       border: 0;
       border-radius: 6px;
-      background: #4f8cff;
       color: #ffffff;
       cursor: pointer;
       font: inherit;
@@ -321,8 +349,23 @@
       padding: 9px 10px;
     }
 
+    #${config.rootId} .ftp-primary-button {
+      background: #4f8cff;
+    }
+
     #${config.rootId} .ftp-primary-button:hover {
       background: #2f6ee8;
+    }
+
+    #${config.rootId} .ftp-danger-button {
+      background: #3a2024;
+      color: #ffb3b3;
+      font-size: 11px;
+      padding: 6px 8px;
+    }
+
+    #${config.rootId} .ftp-danger-button:hover {
+      background: #5a2930;
     }
   `;
 
@@ -372,14 +415,25 @@
     const flipEntryHtml = flipEntry && typeof flipEntry.render === 'function'
       ? flipEntry.render()
       : '<section class="ftp-card"><h2>Flip form unavailable</h2><p>The flip entry module did not load.</p></section>';
+    const savedFlipsHtml = savedFlips && typeof savedFlips.render === 'function'
+      ? savedFlips.render({ flips })
+      : '<section class="ftp-card"><h2>Saved flips unavailable</h2><p>The saved flips module did not load.</p></section>';
 
-    return `${dashboardHtml}${flipEntryHtml}`;
+    return `${dashboardHtml}${flipEntryHtml}${savedFlipsHtml}`;
   }
 
   function bindModules(root) {
     if (flipEntry && typeof flipEntry.bind === 'function') {
       flipEntry.bind(root, {
         onSave: () => renderApp(root),
+        storagePrefix: config.storagePrefix,
+        store: flipStore
+      });
+    }
+
+    if (savedFlips && typeof savedFlips.bind === 'function') {
+      savedFlips.bind(root, {
+        onDelete: () => renderApp(root),
         storagePrefix: config.storagePrefix,
         store: flipStore
       });
