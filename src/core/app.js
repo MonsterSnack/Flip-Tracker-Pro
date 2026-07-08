@@ -1,20 +1,20 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.4.3
+// @version      0.5.0
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.4.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.4.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.5.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.5.0
 // @grant        none
 // ==/UserScript==
 
@@ -23,11 +23,13 @@
 
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
-    shortName: 'FTP',
-    version: '0.4.3',
+    shortName: 'FT',
+    version: '0.5.0',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: {
+      width: 760,
+      height: 560,
       top: 96,
       right: 24
     }
@@ -43,7 +45,25 @@
   const backup = window.FlipTrackerProBackup;
   const savedFlips = window.FlipTrackerProSavedFlips;
   const activeViewKey = `${config.storagePrefix}:activeView`;
-  let activeView = window.localStorage.getItem(activeViewKey) || 'tracker';
+  const routes = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'calculator', label: 'Calculator' },
+    { id: 'portfolio', label: 'Portfolio' },
+    { id: 'purchases', label: 'Purchases' },
+    { id: 'history', label: 'History' },
+    { id: 'statistics', label: 'Statistics' },
+    { id: 'settings', label: 'Settings' }
+  ];
+  const legacyRouteMap = {
+    analytics: 'statistics',
+    tracker: 'dashboard'
+  };
+  const savedActiveView = window.localStorage.getItem(activeViewKey) || 'dashboard';
+  let activeView = legacyRouteMap[savedActiveView] || savedActiveView;
+
+  if (!routes.some((route) => route.id === activeView)) {
+    activeView = 'dashboard';
+  }
 
   const styles = `
     #${config.rootId} {
@@ -56,8 +76,13 @@
     }
 
     #${config.rootId} .ftp-window {
-      width: 360px;
-      min-height: 480px;
+      position: relative;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      width: ${config.defaultWindow.width}px;
+      height: ${config.defaultWindow.height}px;
+      min-width: 320px;
+      min-height: 360px;
       overflow: hidden;
       border: 1px solid #313744;
       border-radius: 8px;
@@ -66,13 +91,15 @@
     }
 
     #${config.rootId} .ftp-window[data-display-mode="compact"] {
-      width: 58px;
+      width: 52px !important;
+      height: 44px !important;
+      min-width: 52px;
       min-height: 44px;
     }
 
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-titlebar {
       justify-content: center;
-      width: 58px;
+      width: 52px;
       height: 44px;
       padding: 0;
       border-bottom: 0;
@@ -93,6 +120,7 @@
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-version,
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-window-actions,
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-body,
+    #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-resize-handle,
     #${config.rootId} .ftp-window[data-window-state="minimized"] .ftp-body,
     #${config.rootId} .ftp-window[data-window-state="closed"] {
       display: none;
@@ -104,6 +132,10 @@
 
     #${config.rootId} .ftp-window[data-dragging="true"] .ftp-titlebar {
       cursor: grabbing;
+    }
+
+    #${config.rootId} .ftp-window[data-resizing="true"] {
+      user-select: none;
     }
 
     #${config.rootId} .ftp-titlebar {
@@ -121,6 +153,8 @@
 
     #${config.rootId} .ftp-title-group,
     #${config.rootId} .ftp-body,
+    #${config.rootId} .ftp-sidebar,
+    #${config.rootId} .ftp-main-content,
     #${config.rootId} .ftp-stats,
     #${config.rootId} .ftp-flip-list,
     #${config.rootId} .ftp-saved-flips,
@@ -168,7 +202,6 @@
     #${config.rootId} .ftp-window-actions,
     #${config.rootId} .ftp-flip-row,
     #${config.rootId} .ftp-row-actions,
-    #${config.rootId} .ftp-tabs,
     #${config.rootId} .ftp-chart-label {
       display: flex;
       align-items: center;
@@ -198,34 +231,47 @@
     }
 
     #${config.rootId} .ftp-body {
-      gap: 12px;
-      max-height: 560px;
-      overflow-y: auto;
-      padding: 14px;
+      grid-template-columns: 150px minmax(0, 1fr);
+      min-height: 0;
+      overflow: hidden;
     }
 
-    #${config.rootId} .ftp-tabs {
+    #${config.rootId} .ftp-sidebar {
+      align-content: start;
       gap: 6px;
+      overflow-y: auto;
+      border-right: 1px solid #313744;
+      background: #151820;
+      padding: 12px;
     }
 
-    #${config.rootId} .ftp-tab-button {
-      flex: 1;
-      border: 1px solid #313744;
+    #${config.rootId} .ftp-nav-button {
+      width: 100%;
+      border: 1px solid transparent;
       border-radius: 6px;
-      background: #181b22;
+      background: transparent;
       color: #9aa3b2;
       cursor: pointer;
       font: inherit;
       font-size: 12px;
       font-weight: 700;
-      padding: 8px 6px;
+      padding: 9px 10px;
+      text-align: left;
     }
 
-    #${config.rootId} .ftp-tab-button:hover,
-    #${config.rootId} .ftp-tab-button[data-active="true"] {
+    #${config.rootId} .ftp-nav-button:hover,
+    #${config.rootId} .ftp-nav-button[data-active="true"] {
       border-color: #4f8cff;
       background: #263145;
       color: #f4f6fb;
+    }
+
+    #${config.rootId} .ftp-main-content {
+      align-content: start;
+      gap: 12px;
+      min-width: 0;
+      overflow-y: auto;
+      padding: 14px;
     }
 
     #${config.rootId} .ftp-card,
@@ -256,7 +302,7 @@
     }
 
     #${config.rootId} .ftp-analytics-stats {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     #${config.rootId} [data-saved-flips-controls],
@@ -314,6 +360,7 @@
     }
 
     #${config.rootId} .ftp-saved-flip {
+      display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
     }
@@ -456,6 +503,27 @@
     #${config.rootId} .ftp-danger-button:hover {
       background: #5a2930;
     }
+
+    #${config.rootId} .ftp-resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      touch-action: none;
+    }
+
+    #${config.rootId} .ftp-resize-handle::after {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 7px;
+      height: 7px;
+      border-right: 2px solid #586173;
+      border-bottom: 2px solid #586173;
+      content: '';
+    }
   `;
 
   function injectStyles() {
@@ -507,82 +575,79 @@
       : undefined;
   }
 
-  function renderTabs() {
+  function renderSidebar() {
     return `
-      <nav class="ftp-tabs" aria-label="Flip Tracker sections">
-        <button class="ftp-tab-button" type="button" data-view-tab="tracker" data-active="${activeView === 'tracker'}">Tracker</button>
-        <button class="ftp-tab-button" type="button" data-view-tab="analytics" data-active="${activeView === 'analytics'}">Analytics</button>
-        <button class="ftp-tab-button" type="button" data-view-tab="settings" data-active="${activeView === 'settings'}">Settings</button>
+      <nav class="ftp-sidebar" aria-label="Flip Tracker sections">
+        ${routes.map((route) => `
+          <button class="ftp-nav-button" type="button" data-view-route="${route.id}" data-active="${activeView === route.id}">${route.label}</button>
+        `).join('')}
       </nav>
     `;
   }
 
-  function getAppHtml() {
+  function renderModule(moduleReference, args, unavailableTitle) {
+    return moduleReference && typeof moduleReference.render === 'function'
+      ? moduleReference.render(args)
+      : `<section class="ftp-card"><h2>${unavailableTitle}</h2><p>This section could not load.</p></section>`;
+  }
+
+  function getRouteHtml() {
     const flips = getSavedFlips();
     const openPurchaseItems = getOpenPurchases();
     const summary = getSummary(flips);
     const openSummary = getOpenSummary(openPurchaseItems);
-    const dashboardHtml = dashboard && typeof dashboard.render === 'function'
-      ? dashboard.render({ openSummary, summary })
-      : '<section class="ftp-card"><h2>Dashboard unavailable</h2><p>The dashboard module did not load.</p></section>';
+    const dashboardHtml = renderModule(dashboard, { openSummary, summary }, 'Dashboard unavailable');
     const recentFlipsHtml = dashboard && typeof dashboard.renderRecentFlips === 'function'
       ? dashboard.renderRecentFlips({ flips })
-      : '<section class="ftp-card"><h2>Recent Flips unavailable</h2><p>The recent flips module did not load.</p></section>';
-    const analyticsHtml = analytics && typeof analytics.render === 'function'
-      ? analytics.render({ flips })
-      : '<section class="ftp-card"><h2>Analytics unavailable</h2><p>The analytics module did not load.</p></section>';
-    const flipEntryHtml = flipEntry && typeof flipEntry.render === 'function'
-      ? flipEntry.render()
-      : '<section class="ftp-card"><h2>Flip form unavailable</h2><p>The flip entry module did not load.</p></section>';
-    const openPurchasesHtml = openPurchases && typeof openPurchases.render === 'function'
-      ? openPurchases.render({ purchases: openPurchaseItems })
-      : '<section class="ftp-card"><h2>Open purchases unavailable</h2><p>The open purchases module did not load.</p></section>';
-    const backupHtml = backup && typeof backup.render === 'function'
-      ? backup.render()
-      : '<section class="ftp-card"><h2>Backup unavailable</h2><p>The backup module did not load.</p></section>';
-    const savedFlipsHtml = savedFlips && typeof savedFlips.render === 'function'
-      ? savedFlips.render({ flips })
-      : '<section class="ftp-card"><h2>Saved flips unavailable</h2><p>The saved flips module did not load.</p></section>';
-    const trackerHtml = `${dashboardHtml}${flipEntryHtml}${openPurchasesHtml}${recentFlipsHtml}${savedFlipsHtml}`;
-    const settingsHtml = `${backupHtml}`;
-    const viewHtml = activeView === 'analytics'
-      ? analyticsHtml
-      : activeView === 'settings'
-        ? settingsHtml
-        : trackerHtml;
+      : '<section class="ftp-card"><h2>Recent Flips unavailable</h2><p>This section could not load.</p></section>';
+    const analyticsHtml = renderModule(analytics, { flips }, 'Statistics unavailable');
+    const flipEntryHtml = renderModule(flipEntry, undefined, 'Calculator unavailable');
+    const openPurchasesHtml = renderModule(openPurchases, { purchases: openPurchaseItems }, 'Purchases unavailable');
+    const backupHtml = renderModule(backup, undefined, 'Settings unavailable');
+    const savedFlipsHtml = renderModule(savedFlips, { flips }, 'Portfolio unavailable');
 
-    return `${renderTabs()}${viewHtml}`;
+    if (activeView === 'calculator') {
+      return flipEntryHtml;
+    }
+
+    if (activeView === 'portfolio') {
+      return savedFlipsHtml;
+    }
+
+    if (activeView === 'purchases') {
+      return openPurchasesHtml;
+    }
+
+    if (activeView === 'history') {
+      return `${recentFlipsHtml}${savedFlipsHtml}`;
+    }
+
+    if (activeView === 'statistics') {
+      return analyticsHtml;
+    }
+
+    if (activeView === 'settings') {
+      return backupHtml;
+    }
+
+    return `${dashboardHtml}${recentFlipsHtml}`;
   }
 
-  function bindTabs(root) {
-    root.querySelectorAll('[data-view-tab]').forEach((button) => {
+  function getAppHtml() {
+    return `${renderSidebar()}<div class="ftp-main-content" data-route-content>${getRouteHtml()}</div>`;
+  }
+
+  function bindSidebar(root) {
+    root.querySelectorAll('[data-view-route]').forEach((button) => {
       button.addEventListener('click', () => {
-        activeView = button.dataset.viewTab || 'tracker';
+        activeView = button.dataset.viewRoute || 'dashboard';
         window.localStorage.setItem(activeViewKey, activeView);
         renderApp(root);
       });
     });
   }
 
-  function bindModules(root) {
-    bindTabs(root);
-
-    if (activeView === 'settings') {
-      if (backup && typeof backup.bind === 'function') {
-        backup.bind(root, {
-          onImport: () => renderApp(root),
-          storagePrefix: config.storagePrefix,
-          store: flipStore
-        });
-      }
-
-      return;
-    }
-
-    if (activeView !== 'tracker') {
-      return;
-    }
-
+  function bindFlipEntry(root) {
     if (flipEntry && typeof flipEntry.bind === 'function') {
       flipEntry.bind(root, {
         onSave: () => renderApp(root),
@@ -590,7 +655,9 @@
         store: flipStore
       });
     }
+  }
 
+  function bindOpenPurchases(root) {
     if (openPurchases && typeof openPurchases.bind === 'function') {
       openPurchases.bind(root, {
         onChange: () => renderApp(root),
@@ -598,11 +665,17 @@
         store: flipStore
       });
     }
+  }
 
+  function bindSavedFlips(root) {
     if (savedFlips && typeof savedFlips.bind === 'function') {
       savedFlips.bind(root, {
         onDelete: () => renderApp(root),
         onEdit: (flip) => {
+          activeView = 'calculator';
+          window.localStorage.setItem(activeViewKey, activeView);
+          renderApp(root);
+
           const form = root.querySelector('[data-flip-entry-form]');
 
           if (form && typeof form.loadFlip === 'function') {
@@ -612,6 +685,39 @@
         storagePrefix: config.storagePrefix,
         store: flipStore
       });
+    }
+  }
+
+  function bindBackup(root) {
+    if (backup && typeof backup.bind === 'function') {
+      backup.bind(root, {
+        onImport: () => renderApp(root),
+        storagePrefix: config.storagePrefix,
+        store: flipStore
+      });
+    }
+  }
+
+  function bindModules(root) {
+    bindSidebar(root);
+
+    if (activeView === 'calculator') {
+      bindFlipEntry(root);
+      return;
+    }
+
+    if (activeView === 'portfolio' || activeView === 'history') {
+      bindSavedFlips(root);
+      return;
+    }
+
+    if (activeView === 'purchases') {
+      bindOpenPurchases(root);
+      return;
+    }
+
+    if (activeView === 'settings') {
+      bindBackup(root);
     }
   }
 
@@ -625,7 +731,7 @@
 
     const appWindow = windowShell.createWindow({
       title: config.appName,
-      shortTitle: config.shortName || 'FTP',
+      shortTitle: config.shortName || 'FT',
       version: config.version,
       bodyHtml: getAppHtml(),
       storagePrefix: config.storagePrefix
