@@ -62,10 +62,10 @@ const FlipTrackerProWindow = (() => {
 
     try {
       window.localStorage.setItem(getStorageKey(storagePrefix), JSON.stringify({
-        height: isCompact && savedState.height ? savedState.height : Math.round(windowRect.height),
+        height: isCompact ? savedState.height : Math.round(windowRect.height),
         left: Math.round(rootRect.left),
         top: Math.round(rootRect.top),
-        width: isCompact && savedState.width ? savedState.width : Math.round(windowRect.width)
+        width: isCompact ? savedState.width : Math.round(windowRect.width)
       }));
     } catch (error) {
       // Window state persistence is nice to have; the app should keep working without it.
