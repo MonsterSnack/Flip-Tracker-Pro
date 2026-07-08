@@ -35,6 +35,13 @@ const FlipTrackerProFlipStore = (() => {
     return nextFlip;
   }
 
+  function remove(storagePrefix, flipId) {
+    const flips = read(storagePrefix);
+    const nextFlips = flips.filter((flip) => flip.id !== flipId);
+    write(storagePrefix, nextFlips);
+    return nextFlips;
+  }
+
   function summarize(flips) {
     const summary = flips.reduce((totals, flip) => {
       totals.totalProfit += Number(flip.profit) || 0;
@@ -65,6 +72,7 @@ const FlipTrackerProFlipStore = (() => {
   return {
     add,
     read,
+    remove,
     summarize
   };
 })();
