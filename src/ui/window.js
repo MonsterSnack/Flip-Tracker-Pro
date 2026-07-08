@@ -25,20 +25,22 @@ const FlipTrackerProWindow = (() => {
   }
 
   function savePosition(root, storagePrefix) {
+    const rootRect = root.getBoundingClientRect();
+
     try {
       window.localStorage.setItem(getStorageKey(storagePrefix), JSON.stringify({
-        left: root.offsetLeft,
-        top: root.offsetTop
+        left: Math.round(rootRect.left),
+        top: Math.round(rootRect.top)
       }));
     } catch (error) {
       // Position persistence is nice to have; the app should keep working without it.
     }
   }
 
-  function applySavedPosition(root, storagePrefix) {
+  function restorePosition(root, storagePrefix) {
     const savedPosition = readSavedPosition(storagePrefix);
 
-    if (!savedPosition) {
+    if (!root || !savedPosition) {
       return;
     }
 
@@ -104,6 +106,7 @@ const FlipTrackerProWindow = (() => {
 
       dragState.root.style.left = `${nextLeft}px`;
       dragState.root.style.top = `${nextTop}px`;
+      savePosition(dragState.root, storagePrefix);
     });
 
     titlebar.addEventListener('pointerup', (event) => {
@@ -168,17 +171,14 @@ const FlipTrackerProWindow = (() => {
       setWindowState(windowElement, 'closed');
     });
 
-    window.requestAnimationFrame(() => {
-      applySavedPosition(windowElement.parentElement, storagePrefix);
-    });
-
     makeDraggable(windowElement, storagePrefix);
 
     return windowElement;
   }
 
   return {
-    createWindow
+    createWindow,
+    restorePosition
   };
 })();
 
