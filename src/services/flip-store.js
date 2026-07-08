@@ -3,23 +3,43 @@ const FlipTrackerProFlipStore = (() => {
     return `${storagePrefix || 'flipTrackerPro'}:flips`;
   }
 
-  function read(storagePrefix) {
+  function getOpenPurchasesKey(storagePrefix) {
+    return `${storagePrefix || 'flipTrackerPro'}:openPurchases`;
+  }
+
+  function readList(storageKey) {
     try {
-      const rawFlips = window.localStorage.getItem(getStorageKey(storagePrefix));
-      const flips = rawFlips ? JSON.parse(rawFlips) : [];
-      return Array.isArray(flips) ? flips : [];
+      const rawItems = window.localStorage.getItem(storageKey);
+      const items = rawItems ? JSON.parse(rawItems) : [];
+      return Array.isArray(items) ? items : [];
     } catch (error) {
       return [];
     }
   }
 
-  function write(storagePrefix, flips) {
+  function writeList(storageKey, items) {
     try {
-      window.localStorage.setItem(getStorageKey(storagePrefix), JSON.stringify(flips));
+      window.localStorage.setItem(storageKey, JSON.stringify(items));
       return true;
     } catch (error) {
       return false;
     }
+  }
+
+  function read(storagePrefix) {
+    return readList(getStorageKey(storagePrefix));
+  }
+
+  function write(storagePrefix, flips) {
+    return writeList(getStorageKey(storagePrefix), flips);
+  }
+
+  function readOpenPurchases(storagePrefix) {
+    return readList(getOpenPurchasesKey(storagePrefix));
+  }
+
+  function writeOpenPurchases(storagePrefix, purchases) {
+    return writeList(getOpenPurchasesKey(storagePrefix), purchases);
   }
 
   function add(storagePrefix, flip) {
@@ -36,8 +56,26 @@ const FlipTrackerProFlipStore = (() => {
     return nextFlip;
   }
 
+  function addOpenPurchase(storagePrefix, purchase) {
+    const purchases = readOpenPurchases(storagePrefix);
+    const nextPurchase = {
+      ...purchase,
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    purchases.unshift(nextPurchase);
+    writeOpenPurchases(storagePrefix, purchases);
+    return nextPurchase;
+  }
+
   function find(storagePrefix, flipId) {
     return read(storagePrefix).find((flip) => flip.id === flipId) || null;
+  }
+
+  function findOpenPurchase(storagePrefix, purchaseId) {
+    return readOpenPurchases(storagePrefix).find((purchase) => purchase.id === purchaseId) || null;
   }
 
   function remove(storagePrefix, flipId) {
@@ -45,6 +83,13 @@ const FlipTrackerProFlipStore = (() => {
     const nextFlips = flips.filter((flip) => flip.id !== flipId);
     write(storagePrefix, nextFlips);
     return nextFlips;
+  }
+
+  function removeOpenPurchase(storagePrefix, purchaseId) {
+    const purchases = readOpenPurchases(storagePrefix);
+    const nextPurchases = purchases.filter((purchase) => purchase.id !== purchaseId);
+    writeOpenPurchases(storagePrefix, nextPurchases);
+    return nextPurchases;
   }
 
   function update(storagePrefix, flipId, patch) {
@@ -68,6 +113,20 @@ const FlipTrackerProFlipStore = (() => {
 
     write(storagePrefix, nextFlips);
     return updatedFlip;
+  }
+
+  function summarizeOpenPurchases(purchases) {
+    const totalInvested = purchases.reduce((total, purchase) => {
+      const buyPrice = Number(purchase.buyPrice) || 0;
+      const quantity = Number(purchase.quantity) || 0;
+      return total + (buyPrice * quantity);
+    }, 0);
+
+    return {
+      openCount: purchases.length,
+      openQuantity: purchases.reduce((total, purchase) => total + (Number(purchase.quantity) || 0), 0),
+      totalInvested
+    };
   }
 
   function summarize(flips) {
@@ -99,11 +158,18 @@ const FlipTrackerProFlipStore = (() => {
 
   return {
     add,
+    addOpenPurchase,
     find,
+    findOpenPurchase,
     read,
+    readOpenPurchases,
     remove,
+    removeOpenPurchase,
     summarize,
-    update
+    summarizeOpenPurchases,
+    update,
+    write,
+    writeOpenPurchases
   };
 })();
 
