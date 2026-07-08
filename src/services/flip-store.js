@@ -27,7 +27,8 @@ const FlipTrackerProFlipStore = (() => {
     const nextFlip = {
       ...flip,
       id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     flips.unshift(nextFlip);
@@ -35,11 +36,38 @@ const FlipTrackerProFlipStore = (() => {
     return nextFlip;
   }
 
+  function find(storagePrefix, flipId) {
+    return read(storagePrefix).find((flip) => flip.id === flipId) || null;
+  }
+
   function remove(storagePrefix, flipId) {
     const flips = read(storagePrefix);
     const nextFlips = flips.filter((flip) => flip.id !== flipId);
     write(storagePrefix, nextFlips);
     return nextFlips;
+  }
+
+  function update(storagePrefix, flipId, patch) {
+    const flips = read(storagePrefix);
+    let updatedFlip = null;
+    const nextFlips = flips.map((flip) => {
+      if (flip.id !== flipId) {
+        return flip;
+      }
+
+      updatedFlip = {
+        ...flip,
+        ...patch,
+        id: flip.id,
+        createdAt: flip.createdAt,
+        updatedAt: new Date().toISOString()
+      };
+
+      return updatedFlip;
+    });
+
+    write(storagePrefix, nextFlips);
+    return updatedFlip;
   }
 
   function summarize(flips) {
@@ -71,9 +99,11 @@ const FlipTrackerProFlipStore = (() => {
 
   return {
     add,
+    find,
     read,
     remove,
-    summarize
+    summarize,
+    update
   };
 })();
 
