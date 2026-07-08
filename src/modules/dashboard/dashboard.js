@@ -1,4 +1,10 @@
 const FlipTrackerProDashboard = (() => {
+  function escapeHtml(value) {
+    return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
+      ? window.FlipTrackerProHtml.escapeHtml(value)
+      : String(value ?? '');
+  }
+
   function formatMoney(value) {
     return new Intl.NumberFormat('en-US', {
       maximumFractionDigits: 0,
@@ -14,25 +20,25 @@ const FlipTrackerProDashboard = (() => {
   function createStat(label, value) {
     return `
       <div class="ftp-stat">
-        <span>${label}</span>
-        <strong>${value}</strong>
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
       </div>
     `;
   }
 
-  function createRecentFlip(flip) {
+  function createRecentSale(sale) {
     return `
       <li class="ftp-flip-row">
-        <span>${flip.itemName || 'Unnamed item'}</span>
-        <strong data-profit-state="${flip.profit >= 0 ? 'positive' : 'negative'}">${formatMoney(flip.profit)}</strong>
+        <span>${escapeHtml(sale.itemName || 'Unnamed item')}</span>
+        <strong data-profit-state="${sale.profit >= 0 ? 'positive' : 'negative'}">${formatMoney(sale.profit)}</strong>
       </li>
     `;
   }
 
-  function renderRecentFlips({ flips = [] } = {}) {
-    const recentFlips = flips.slice(0, 3);
-    const recentHtml = recentFlips.length > 0
-      ? `<ul class="ftp-flip-list">${recentFlips.map(createRecentFlip).join('')}</ul>`
+  function renderRecentFlips({ flips = [], sales = flips } = {}) {
+    const recentSales = sales.slice(0, 3);
+    const recentHtml = recentSales.length > 0
+      ? `<ul class="ftp-flip-list">${recentSales.map(createRecentSale).join('')}</ul>`
       : '<p>No flips saved yet. Add your first flip below.</p>';
 
     return `
