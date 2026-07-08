@@ -1,7 +1,7 @@
 const FlipTrackerProConfig = Object.freeze({
   appName: 'Flip Tracker Pro',
   shortName: 'FTP',
-  version: '0.4.2',
+  version: '0.4.3',
   rootId: 'flip-tracker-pro-root',
   storagePrefix: 'flipTrackerPro',
   defaultWindow: {
