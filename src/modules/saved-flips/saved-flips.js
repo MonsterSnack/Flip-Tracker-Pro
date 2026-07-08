@@ -26,8 +26,9 @@ const FlipTrackerProSavedFlips = (() => {
     return flips
       .filter((flip) => {
         const itemName = String(flip.itemName || '').toLowerCase();
+        const notes = String(flip.notes || '').toLowerCase();
         const profit = Number(flip.profit) || 0;
-        const matchesQuery = !query || itemName.includes(query);
+        const matchesQuery = !query || itemName.includes(query) || notes.includes(query);
         const matchesProfit = activeFilters.profit === 'all'
           || (activeFilters.profit === 'profit' && profit >= 0)
           || (activeFilters.profit === 'loss' && profit < 0);
@@ -52,7 +53,7 @@ const FlipTrackerProSavedFlips = (() => {
       <div class="ftp-form-grid" data-saved-flips-controls>
         <label class="ftp-field">
           <span>Search</span>
-          <input class="ftp-input" type="search" value="${activeFilters.query}" placeholder="Item name" data-saved-search>
+          <input class="ftp-input" type="search" value="${activeFilters.query}" placeholder="Item or note" data-saved-search>
         </label>
 
         <label class="ftp-field">
@@ -85,6 +86,7 @@ const FlipTrackerProSavedFlips = (() => {
           <strong>${flip.itemName || 'Unnamed item'}</strong>
           <span>Buy ${formatMoney(flip.buyPrice)} / Sell ${formatMoney(flip.sellPrice)} / Qty ${flip.quantity || 1}</span>
           <span>Fees ${formatMoney(flip.fees)} / Margin ${(Number(flip.margin) || 0).toFixed(1)}%</span>
+          ${flip.notes ? `<span>Note: ${flip.notes}</span>` : ''}
         </div>
 
         <div class="ftp-saved-flip-side">
