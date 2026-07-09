@@ -54,7 +54,7 @@ const FlipTrackerProBackup = (() => {
 
   function getReviewQueue(storagePrefix) {
     const data = getStoredData(storagePrefix);
-    return Array.isArray(data.importReviewQueue) ? data.importReviewQueue : [];
+    return Array.isArray(data.importReviewQueue) ? data.importReviewQueue.filter((item) => !item.ignored) : [];
   }
 
   function getLastImportText(storagePrefix) {
@@ -87,26 +87,68 @@ const FlipTrackerProBackup = (() => {
     `;
   }
 
-  function renderImportSummary(summary) {
+  function renderImportSummary(summary, storagePrefix) {
     if (!summary) return '';
+    const reviewCount = getReviewQueue(storagePrefix).length || summary.activeReviewItems || summary.reviewCandidatesCreated || 0;
     const diagnostic = summary.diagnosticMessage ? `<small>${escapeHtml(summary.diagnosticMessage)}</small>` : '';
     const warnings = Array.isArray(summary.warnings) && summary.warnings.length ? `<small>${summary.warnings.map(escapeHtml).join(' | ')}</small>` : '';
     const errors = Array.isArray(summary.errors) && summary.errors.length ? `<small>${summary.errors.map(escapeHtml).join(' | ')}</small>` : '';
     const progress = summary.progress ? `<small>Processed ${summary.progress.processed || 0}/${summary.progress.total || 0} logs.</small>` : '';
+    const reviewButton = reviewCount > 0 ? `<div class="ftp-form-actions"><button class="ftp-secondary-button" type="button" data-scroll-review-items>Review import items</button></div>` : '';
     return `
       <div class="ftp-profit-preview" data-log-import-summary>
         <span>Import summary</span>
         <small>Purchases ${summary.purchasesImported || 0} / Sales ${summary.salesImported || 0} / Duplicates ${summary.duplicatesSkipped || 0} / Unmatched sales ${summary.unmatchedSales || 0}</small>
-        <small>Needs review ${summary.reviewCandidatesCreated || 0} / Parser failures ${summary.parserFailures || 0} / Validation failures ${summary.validationFailures || 0}</small>
-        ${progress}${diagnostic}${warnings}${errors}
+        <small>Needs review ${reviewCount} / Parser failures ${summary.parserFailures || 0} / Validation failures ${summary.validationFailures || 0}</small>
+        <small>Pipe buys ${summary.pipeBuyMatches || 0} / Pipe sells ${summary.pipeSellMatches || 0} / Text buys ${summary.textBuyMatches || 0} / Text sells ${summary.textSellMatches || 0}</small>
+        ${progress}${diagnostic}${warnings}${errors}${reviewButton}
       </div>
     `;
   }
 
+  function renderReviewItem(item) {
+    const reviewId = escapeHtml(item.id || item.entryId || item.originalLogId);
+    return `
+      <article class="ftp-profit-preview" data-review-item="${reviewId}">
+        <span>${escapeHtml(item.type || 'buy')} / entry ${escapeHtml(item.entryId || '')} / log ${escapeHtml(item.logTypeId || '')}</span>
+        <small>${escapeHtml(item.timestamp || '')}</small>
+        <small>${escapeHtml(item.reason || '')}</small>
+        <small>${escapeHtml(item.textPreview || '')}</small>
+        <div class="ftp-form-grid">
+          <label class="ftp-field"><span>Item name</span><input class="ftp-input" data-review-field="itemName" value="${escapeHtml(item.itemName || '')}" placeholder="Item name"></label>
+          <label class="ftp-field"><span>Item ID</span><input class="ftp-input" data-review-field="itemId" value="${escapeHtml(item.itemId || '')}" placeholder="1301"></label>
+          <label class="ftp-field"><span>Quantity</span><input class="ftp-input" data-review-field="quantity" type="number" min="1" step="1" value="${escapeHtml(item.quantity || '')}"></label>
+          <label class="ftp-field"><span>Unit price</span><input class="ftp-input" data-review-field="unitPrice" type="number" min="0" step="1" value="${escapeHtml(item.unitPrice || '')}"></label>
+          <label class="ftp-field"><span>Total price</span><input class="ftp-input" data-review-field="totalPrice" type="number" min="0" step="1" value="${escapeHtml(item.totalPrice || '')}"></label>
+          <label class="ftp-field"><span>Fees for sales</span><input class="ftp-input" data-review-field="fees" type="number" min="0" step="1" value="${escapeHtml(item.fees || '')}"></label>
+        </div>
+        <div class="ftp-form-actions ftp-backup-actions">
+          <button class="ftp-primary-button" type="button" data-review-save-purchase>Save as Purchase</button>
+          <button class="ftp-secondary-button" type="button" data-review-save-sale>Save as Sale</button>
+          <button class="ftp-secondary-button" type="button" data-review-ignore>Ignore</button>
+          <button class="ftp-danger-button" type="button" data-review-delete>Delete from review</button>
+        </div>
+      </article>
+    `;
+  }
+
   function renderReviewQueue(storagePrefix) {
-    const items = getReviewQueue(storagePrefix).slice(0, 5);
-    if (!items.length) return '<small>Needs review: 0</small>';
-    return `<small>Needs review: ${escapeHtml(getReviewQueue(storagePrefix).length)}</small>${items.map((item) => `<small>${escapeHtml(`${item.type || ''} / ${item.entryId || ''} / ${item.logTypeId || ''} / ${item.reason || ''} / ${item.textPreview || ''}`)}</small>`).join('')}`;
+    const items = getReviewQueue(storagePrefix);
+    if (!items.length) {
+      return `
+        <div class="ftp-profit-preview" data-import-review-section>
+          <span>Needs Review</span>
+          <small>No import items need review.</small>
+        </div>
+      `;
+    }
+    return `
+      <div class="ftp-profit-preview" data-import-review-section>
+        <span>Needs Review</span>
+        <small>${escapeHtml(items.length)} item(s) can be fixed or saved here. Items in review are not treated as imported duplicates.</small>
+        ${items.map(renderReviewItem).join('')}
+      </div>
+    `;
   }
 
   function renderLogImportDebug(debug = {}, storagePrefix = '') {
@@ -114,6 +156,7 @@ const FlipTrackerProBackup = (() => {
     const samples = Array.isArray(debug.firstRecognizedLogs) && debug.firstRecognizedLogs.length ? debug.firstRecognizedLogs.slice(0, 5) : Array.isArray(debug.firstLogs) ? debug.firstLogs.slice(0, 5) : [];
     const sampleHtml = samples.map((log) => `<small>${escapeHtml(`${log.entryId || ''} / ${log.logTypeId || ''} / ${log.timestamp || ''} / ${log.textPreview || ''} / keys: ${(log.rawKeys || []).join(', ')}`)}</small>`).join('');
     const timings = debug.timings || {};
+    const reasons = Array.isArray(debug.parserFailureReasons) && debug.parserFailureReasons.length ? debug.parserFailureReasons.join(' | ') : 'None';
     return `
       <details class="ftp-profit-preview" data-log-import-debug>
         <summary>Import debug</summary>
@@ -121,17 +164,20 @@ const FlipTrackerProBackup = (() => {
         <small>Endpoint: ${escapeHtml(debug.lastEndpoint || 'Not requested yet')} / Params: ${escapeHtml(params)}</small>
         <small>Raw logs: ${escapeHtml(debug.rawLogsReturned || 0)} / Normalized: ${escapeHtml(debug.normalizedLogs || 0)}</small>
         <small>Recognized buy IDs: ${escapeHtml(debug.buyIdMatches || 0)} / Recognized sell IDs: ${escapeHtml(debug.sellIdMatches || 0)}</small>
+        <small>Pipe buy matches: ${escapeHtml(debug.pipeBuyMatches || 0)} / Pipe sell matches: ${escapeHtml(debug.pipeSellMatches || 0)}</small>
+        <small>Structured buy matches: ${escapeHtml(debug.structuredBuyMatches || 0)} / Structured sell matches: ${escapeHtml(debug.structuredSellMatches || 0)}</small>
         <small>Text buy matches: ${escapeHtml(debug.textBuyMatches || 0)} / Text sell matches: ${escapeHtml(debug.textSellMatches || 0)}</small>
         <small>Classified buys: ${escapeHtml(debug.classifiedPurchases || 0)} / Classified sells: ${escapeHtml(debug.classifiedSales || 0)}</small>
         <small>Buy candidates: ${escapeHtml(debug.buyCandidatesCreated || 0)} / Sell candidates: ${escapeHtml(debug.sellCandidatesCreated || 0)}</small>
         <small>Purchases imported: ${escapeHtml(debug.purchasesImported || 0)} / Sales imported: ${escapeHtml(debug.salesImported || 0)}</small>
         <small>Purchases saved: ${escapeHtml(debug.purchasesSaved || 0)} / Sales saved: ${escapeHtml(debug.salesSaved || 0)}</small>
-        <small>Duplicates: ${escapeHtml(debug.duplicatesSkipped || 0)} / Unmatched: ${escapeHtml(debug.unmatchedSales || 0)}</small>
-        <small>Needs review: ${escapeHtml(debug.reviewCandidatesCreated || 0)} / Parser failures: ${escapeHtml(debug.parserFailures || 0)} / Validation failures: ${escapeHtml(debug.validationFailures || 0)}</small>
+        <small>Duplicates: ${escapeHtml(debug.duplicatesSkipped || 0)} / Ignored: ${escapeHtml(debug.ignoredItems || 0)} / Unmatched: ${escapeHtml(debug.unmatchedSales || 0)}</small>
+        <small>Needs review created: ${escapeHtml(debug.reviewCandidatesCreated || 0)} / Active review: ${escapeHtml(debug.activeReviewItems || getReviewQueue(storagePrefix).length || 0)}</small>
+        <small>Parser failures: ${escapeHtml(debug.parserFailures || 0)} / Validation failures: ${escapeHtml(debug.validationFailures || 0)}</small>
+        <small>Failure reasons: ${escapeHtml(reasons)}</small>
         <small>Timings ms: fetch ${escapeHtml(timings.fetchMs || 0)} / normalize ${escapeHtml(timings.normalizeMs || 0)} / classify ${escapeHtml(timings.classifyMs || 0)} / parse ${escapeHtml(timings.parseMs || 0)} / save ${escapeHtml(timings.storageSaveMs || 0)} / total ${escapeHtml(timings.totalImportMs || 0)}</small>
         <small>Sample raw keys: ${escapeHtml((debug.sampleRawKeys || []).join(', ') || 'None')}</small>
         ${sampleHtml || '<small>No sanitized sample logs yet.</small>'}
-        ${storagePrefix ? renderReviewQueue(storagePrefix) : ''}
         <small>${escapeHtml(debug.diagnosticMessage || '')}</small>
       </details>
     `;
@@ -183,9 +229,15 @@ const FlipTrackerProBackup = (() => {
           <button class="ftp-secondary-button" type="button" data-test-raw-log-api>Raw Log Test</button>
           <button class="ftp-secondary-button" type="button" data-copy-debug-report>Copy debug report</button>
         </div>
+        <div class="ftp-form-actions ftp-backup-actions">
+          <button class="ftp-secondary-button" type="button" data-retry-review-parsing>Retry Needs Review Parsing</button>
+          <button class="ftp-secondary-button" type="button" data-clear-needs-review>Clear Needs Review</button>
+          <button class="ftp-danger-button" type="button" data-reset-import-state>Reset import state</button>
+        </div>
         <p class="ftp-status" data-status="info" data-log-import-status>${escapeHtml(getLastImportText(storagePrefix))}</p>
-        ${renderImportSummary(importSummary)}
+        ${renderImportSummary(importSummary, storagePrefix)}
         ${renderLogImportDebug(debug, storagePrefix)}
+        ${renderReviewQueue(storagePrefix)}
       </section>
     `;
   }
@@ -205,6 +257,10 @@ const FlipTrackerProBackup = (() => {
       normalizedLogCount: debug.normalizedLogs || 0,
       buyIdsDetected: debug.buyIdMatches || 0,
       sellIdsDetected: debug.sellIdMatches || 0,
+      pipeBuyMatches: debug.pipeBuyMatches || 0,
+      pipeSellMatches: debug.pipeSellMatches || 0,
+      structuredBuyMatches: debug.structuredBuyMatches || 0,
+      structuredSellMatches: debug.structuredSellMatches || 0,
       textBuyMatches: debug.textBuyMatches || 0,
       textSellMatches: debug.textSellMatches || 0,
       buyCandidatesCreated: debug.buyCandidatesCreated || 0,
@@ -212,10 +268,13 @@ const FlipTrackerProBackup = (() => {
       purchasesSaved: debug.purchasesSaved || debug.purchasesImported || 0,
       salesSaved: debug.salesSaved || debug.salesImported || 0,
       duplicatesSkipped: debug.duplicatesSkipped || 0,
+      ignoredItems: debug.ignoredItems || 0,
       unmatchedSales: debug.unmatchedSales || 0,
       reviewCandidates: debug.reviewCandidatesCreated || 0,
+      activeReviewItems: getReviewQueue(storagePrefix).length,
       parserFailures: debug.parserFailures || 0,
       validationFailures: debug.validationFailures || 0,
+      parserFailureReasons: debug.parserFailureReasons || [],
       timings: debug.timings || {},
       lastErrorCode: debug.lastErrorCode || '',
       lastError: debug.lastError || '',
@@ -281,6 +340,8 @@ const FlipTrackerProBackup = (() => {
       if (!logImportSection) return;
       const existingDebug = logImportSection.querySelector('[data-log-import-debug]');
       if (existingDebug) existingDebug.outerHTML = renderLogImportDebug(debug || getLogImportDebug(storagePrefix), storagePrefix);
+      const existingReview = logImportSection.querySelector('[data-import-review-section]');
+      if (existingReview) existingReview.outerHTML = renderReviewQueue(storagePrefix);
     }
 
     function updateLogImportStatus(status, message, summary) {
@@ -293,14 +354,16 @@ const FlipTrackerProBackup = (() => {
       }
       if (existingSummary) existingSummary.remove();
       if (summary) {
-        logImportSection.insertAdjacentHTML('beforeend', renderImportSummary(summary));
+        const debugElement = logImportSection.querySelector('[data-log-import-debug]');
+        if (debugElement) debugElement.insertAdjacentHTML('beforebegin', renderImportSummary(summary, storagePrefix));
+        else logImportSection.insertAdjacentHTML('beforeend', renderImportSummary(summary, storagePrefix));
         updateLogImportDebug(summary.debug);
       }
     }
 
     function getImportMessage(summary) {
       if (!summary.ok) return (summary.errors || ['Import failed.']).join(' ');
-      return summary.diagnosticMessage || `Imported ${summary.purchasesImported || 0} purchases and ${summary.salesImported || 0} sales. Skipped ${summary.duplicatesSkipped || 0} duplicates. ${summary.unmatchedSales || 0} unmatched sales. Needs review ${summary.reviewCandidatesCreated || 0}.`;
+      return summary.diagnosticMessage || `Imported ${summary.purchasesImported || 0} purchases and ${summary.salesImported || 0} sales. Skipped ${summary.duplicatesSkipped || 0} duplicates. ${summary.unmatchedSales || 0} unmatched sales. Needs review ${summary.activeReviewItems || summary.reviewCandidatesCreated || 0}.`;
     }
 
     async function runLogImport(options = {}) {
@@ -320,6 +383,33 @@ const FlipTrackerProBackup = (() => {
         updateLogImportStatus('error', error.message || 'Could not import logs.');
         emitNotice('error', 'Log import error', error.message || 'Could not import logs.');
       }
+    }
+
+    function collectReviewValues(button) {
+      const reviewItem = button.closest('[data-review-item]');
+      const values = {};
+      if (!reviewItem) return { reviewId: '', values };
+      reviewItem.querySelectorAll('[data-review-field]').forEach((input) => {
+        values[input.dataset.reviewField] = input.value;
+      });
+      return { reviewId: reviewItem.dataset.reviewItem || '', values };
+    }
+
+    function finishReviewAction(result, title = 'Import review') {
+      const ok = result && result.ok;
+      const message = result && result.message ? result.message : ok ? 'Review updated.' : 'Could not update review item.';
+      updateLogImportStatus(ok ? 'success' : 'error', message);
+      emitNotice(ok ? 'success' : 'error', title, message);
+      if (typeof onImport === 'function') onImport();
+    }
+
+    async function retryReviewParsing() {
+      if (!logImportService || typeof logImportService.retryReviewQueue !== 'function') return finishReviewAction({ ok: false, message: 'Retry review parsing is unavailable.' });
+      updateLogImportStatus('info', 'Retrying Needs Review parsing...');
+      const summary = await logImportService.retryReviewQueue(storagePrefix);
+      updateLogImportStatus(summary.ok ? 'success' : 'error', getImportMessage(summary), summary);
+      emitNotice(summary.ok ? 'success' : 'warning', 'Review retry finished', getImportMessage(summary));
+      if (typeof onImport === 'function') onImport();
     }
 
     if (apiSection) {
@@ -397,6 +487,9 @@ const FlipTrackerProBackup = (() => {
       const rangeButton = logImportSection.querySelector('[data-import-range-logs]');
       const testRawButton = logImportSection.querySelector('[data-test-raw-log-api]');
       const copyDebugButton = logImportSection.querySelector('[data-copy-debug-report]');
+      const retryReviewButton = logImportSection.querySelector('[data-retry-review-parsing]');
+      const clearReviewButton = logImportSection.querySelector('[data-clear-needs-review]');
+      const resetImportStateButton = logImportSection.querySelector('[data-reset-import-state]');
       const fromInput = logImportSection.querySelector('[data-log-import-from]');
       const toInput = logImportSection.querySelector('[data-log-import-to]');
       if (latestButton) latestButton.addEventListener('click', () => runLogImport({}));
@@ -411,6 +504,42 @@ const FlipTrackerProBackup = (() => {
         emitNotice(result.ok ? 'success' : 'warning', 'Raw log test', message);
       });
       if (copyDebugButton) copyDebugButton.addEventListener('click', () => copyText(createDebugReport(storagePrefix), 'Debug report'));
+      if (retryReviewButton) retryReviewButton.addEventListener('click', retryReviewParsing);
+      if (clearReviewButton) clearReviewButton.addEventListener('click', () => {
+        if (!window.confirm('Clear all Needs Review items? This does not delete purchases or sales.')) return;
+        const result = logImportService && typeof logImportService.clearReviewQueue === 'function'
+          ? logImportService.clearReviewQueue(storagePrefix)
+          : { ok: false, message: 'Clear review queue is unavailable.' };
+        finishReviewAction(result, 'Needs review');
+      });
+      if (resetImportStateButton) resetImportStateButton.addEventListener('click', () => {
+        if (!window.confirm('Reset import state only? Purchases, sales, settings, API key, and window position will stay.')) return;
+        const result = logImportService && typeof logImportService.resetImportState === 'function'
+          ? logImportService.resetImportState(storagePrefix)
+          : { ok: false, message: 'Reset import state is unavailable.' };
+        finishReviewAction(result, 'Import state');
+      });
+      logImportSection.addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        if (button.matches('[data-scroll-review-items]')) {
+          const reviewSection = logImportSection.querySelector('[data-import-review-section]');
+          if (reviewSection) reviewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          return;
+        }
+        if (!button.closest('[data-review-item]')) return;
+        if (!logImportService) return finishReviewAction({ ok: false, message: 'Log import service is unavailable.' });
+        const { reviewId, values } = collectReviewValues(button);
+        if (button.matches('[data-review-save-purchase]')) {
+          finishReviewAction(logImportService.saveReviewItem(storagePrefix, reviewId, values, 'buy'), 'Import review');
+        } else if (button.matches('[data-review-save-sale]')) {
+          finishReviewAction(logImportService.saveReviewItem(storagePrefix, reviewId, values, 'sell'), 'Import review');
+        } else if (button.matches('[data-review-ignore]')) {
+          finishReviewAction(logImportService.ignoreReviewItem(storagePrefix, reviewId), 'Import review');
+        } else if (button.matches('[data-review-delete]')) {
+          finishReviewAction(logImportService.deleteReviewItem(storagePrefix, reviewId), 'Import review');
+        }
+      });
     }
 
     if (exportButton) exportButton.addEventListener('click', () => {
