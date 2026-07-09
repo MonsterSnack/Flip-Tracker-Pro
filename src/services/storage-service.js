@@ -126,6 +126,7 @@ const FlipTrackerProStorageService = (() => {
       source: normalizeSource(lot.source),
       originalLogId: lot.originalLogId ? String(lot.originalLogId) : undefined,
       logTypeId: lot.logTypeId === undefined || lot.logTypeId === '' ? undefined : Number(lot.logTypeId),
+      needsNameReview: Boolean(lot.needsNameReview),
       buyPrice: unitBuyPrice,
       unitCost: unitBuyPrice,
       totalCost: totalBuyPrice
@@ -137,18 +138,28 @@ const FlipTrackerProStorageService = (() => {
     const entryId = String(item.entryId || item.originalLogId || item.id || createId());
 
     return {
+      ...item,
       id: item.id || `review-${entryId}`,
       entryId,
       originalLogId: entryId,
       logTypeId: item.logTypeId === undefined || item.logTypeId === '' ? undefined : Number(item.logTypeId),
       timestamp: item.timestamp || item.createdAt || new Date().toISOString(),
       type: item.type === 'sell' ? 'sell' : 'buy',
+      itemId: item.itemId === undefined || item.itemId === null || item.itemId === '' ? undefined : String(item.itemId),
+      itemName: String(item.itemName || ''),
+      quantity: item.quantity === undefined || item.quantity === '' ? '' : toNumber(item.quantity),
+      unitPrice: item.unitPrice === undefined || item.unitPrice === '' ? '' : toNumber(item.unitPrice),
+      totalPrice: item.totalPrice === undefined || item.totalPrice === '' ? '' : toNumber(item.totalPrice),
+      fees: item.fees === undefined || item.fees === '' ? '' : toNumber(item.fees),
       textPreview: String(item.textPreview || item.message || item.text || '').slice(0, 320),
       rawKeys: Array.isArray(item.rawKeys) ? item.rawKeys.map(String).slice(0, 40) : [],
       rawSampleKeys: Array.isArray(item.rawSampleKeys) ? item.rawSampleKeys.map(String).slice(0, 40) : [],
       reason: String(item.reason || 'Parser could not create a valid import candidate.'),
       source: 'api',
-      createdAt: item.createdAt || new Date().toISOString()
+      ignored: Boolean(item.ignored),
+      ignoredAt: item.ignoredAt || '',
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
     };
   }
 
