@@ -4,6 +4,7 @@ const FlipTrackerProTornApiService = (() => {
   const minDelayMs = 750;
   const cacheTtls = Object.freeze({
     itemPrices: 5 * 60 * 1000,
+    logs: 30 * 1000,
     status: 30 * 1000,
     default: 60 * 1000
   });
@@ -75,7 +76,7 @@ const FlipTrackerProTornApiService = (() => {
     };
   }
 
-  function buildUrl({ section = 'torn', id = '', selections = '' } = {}, apiKey) {
+  function buildUrl({ section = 'torn', id = '', selections = '', params = {} } = {}, apiKey) {
     const safeSection = String(section || 'torn').replace(/[^a-z_]/gi, '');
     const safeId = String(id || '').replace(/[^a-z0-9_-]/gi, '');
     const path = safeId ? `/${safeSection}/${safeId}` : `/${safeSection}`;
@@ -84,6 +85,16 @@ const FlipTrackerProTornApiService = (() => {
     if (selections) {
       url.searchParams.set('selections', String(selections));
     }
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+      const safeKey = String(key || '').replace(/[^a-z_]/gi, '');
+
+      if (!safeKey || value === undefined || value === null || value === '') {
+        return;
+      }
+
+      url.searchParams.set(safeKey, String(value));
+    });
 
     url.searchParams.set('key', apiKey);
     return url;
@@ -97,7 +108,7 @@ const FlipTrackerProTornApiService = (() => {
   }
 
   function getCacheKey(requestType, request) {
-    return JSON.stringify({ requestType, section: request.section, id: request.id, selections: request.selections });
+    return JSON.stringify({ requestType, section: request.section, id: request.id, selections: request.selections, params: request.params || {} });
   }
 
   function getCached(requestType, request) {
@@ -216,6 +227,23 @@ const FlipTrackerProTornApiService = (() => {
     }));
   }
 
+  function normalizeLogs(payload) {
+    const logs = payload && (payload.log || payload.logs || payload.user && (payload.user.log || payload.user.logs) || []);
+
+    if (Array.isArray(logs)) {
+      return logs.map((log, index) => ({ ...log, id: log.id || log.log_id || index }));
+    }
+
+    if (logs && typeof logs === 'object') {
+      return Object.entries(logs).map(([logId, log]) => ({
+        ...(log && typeof log === 'object' ? log : { message: String(log || '') }),
+        id: logId
+      }));
+    }
+
+    return [];
+  }
+
   async function fetchItemPrices(storagePrefix) {
     const result = await request(storagePrefix, 'itemPrices', {
       section: 'torn',
@@ -237,6 +265,34 @@ const FlipTrackerProTornApiService = (() => {
     }
 
     return { ...result, data: snapshots };
+  }
+
+  async function fetchUserLogs(storagePrefix, { from = '', to = '', category = '' } = {}) {
+    const params = {};
+
+    if (from) {
+      params.from = from;
+    }
+
+    if (to) {
+      params.to = to;
+    }
+
+    if (category) {
+      params.cat = category;
+    }
+
+    const result = await request(storagePrefix, 'logs', {
+      section: 'user',
+      selections: 'log',
+      params
+    });
+
+    if (!result.ok) {
+      return result;
+    }
+
+    return { ...result, data: normalizeLogs(result.data) };
   }
 
   function saveApiKey(storagePrefix, apiKey) {
@@ -327,6 +383,7 @@ const FlipTrackerProTornApiService = (() => {
   return {
     clearApiKey,
     fetchItemPrices,
+    fetchUserLogs,
     getStatus,
     maskKey,
     request,
