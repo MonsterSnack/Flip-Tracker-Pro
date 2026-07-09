@@ -228,8 +228,14 @@ const FlipTrackerProBackup = (() => {
 
           try {
             const result = await tornApiService.fetchItemPrices(storagePrefix);
-            updateApiStatus('success', `Updated ${result.length} item prices.`);
-            emitNotice('success', 'Prices updated', `Updated ${result.length} item prices.`);
+
+            if (!result.ok) {
+              throw new Error(result.error || 'Could not refresh item prices.');
+            }
+
+            const snapshots = Array.isArray(result.data) ? result.data : [];
+            updateApiStatus('success', `Updated ${snapshots.length} item prices.`);
+            emitNotice('success', 'Prices updated', `Updated ${snapshots.length} item prices.`);
 
             if (typeof onImport === 'function') {
               onImport();
