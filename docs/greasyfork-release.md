@@ -1,6 +1,6 @@
 # GreasyFork Release
 
-Flip Tracker Pro 0.8.1 ships as a standalone Tampermonkey/Greasemonkey userscript.
+Flip Tracker Pro 0.8.2 ships as a standalone Tampermonkey/Greasemonkey userscript.
 
 ## Build
 
@@ -30,6 +30,7 @@ The build script uses only Node's built-in `fs` and `path` modules. It does not 
 8. Check that the window can be dragged and resized.
 9. Add an open purchase, record a sale, and confirm portfolio/history/statistics update.
 10. Open Settings and confirm backup, API key settings, item price refresh, raw log test, debug report copy, and log import controls render.
+11. Run `Test raw log API` and confirm raw logs, normalized logs, buy ID matches, and sell ID matches appear in the debug panel.
 
 ## GreasyFork Notes
 
@@ -47,30 +48,30 @@ The build script uses only Node's built-in `fs` and `path` modules. It does not 
 
 ## API Key Guidance
 
-Recommended key type: Custom.
+Use a Torn Full Access API key for now.
 
-Required selections:
+Flip Tracker Pro stores it locally in your browser only and only sends it to Torn API endpoints. No Torn password is ever required.
 
-```text
-key -> info
-user -> log
-torn -> items
-market -> itemmarket
-```
+## Log Import IDs
 
-Required user log IDs for Custom Key permissions:
+Buy log IDs:
 
 ```text
-1225, 1220, 4201, 1112, 4200, 5927, 5510
+1225, 1220, 4201, 1112, 1103, 4200, 5927, 5510
 ```
 
-These log IDs are key setup requirements. Flip Tracker Pro does not send them as `log=` request filters by default.
+Sell log IDs:
 
-Users should create the key on Torn's official API settings page and manually paste the generated key into Flip Tracker Pro.
+```text
+1226, 1221, 1113, 1104, 4210, 5928, 5511
+```
+
+Version 0.8.2 classifies by Torn log type ID first. Text parsing remains as a fallback for visible Torn log wording such as item market buys and sells.
 
 ## Log Import Diagnostics
 
 - `Test raw log API` calls unfiltered `user -> log` with no date filter and no log ID filter.
-- `Import latest logs` checks the last 24 hours first, then the last 7 days if no logs are returned.
+- `Import latest logs` checks the last 24 hours first, then the last 7 days only if no logs are returned.
+- If raw logs exist but none classify, the UI reports that the parser/classifier did not match.
 - Date ranges that start and end on the same day include the full day, ending at 23:59:59.
-- `Copy debug report` excludes the API key and includes sanitized endpoint, params, counts, first log texts, and last error details.
+- `Copy debug report` excludes the API key and includes sanitized endpoint, params, raw and normalized counts, buy/sell ID matches, text matches, imported counts, duplicate skips, unmatched sales, first sanitized log samples, and timing details.
