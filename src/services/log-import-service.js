@@ -36,7 +36,7 @@ const FlipTrackerProLogImportService = (() => {
     return toNumber(String(value || '').replace(/,/g, ''));
   }
 
-  function toTimestamp(value) {
+  function toTimestamp(value, { endOfDay = false } = {}) {
     if (!value) {
       return '';
     }
@@ -45,7 +45,11 @@ const FlipTrackerProLogImportService = (() => {
       return String(value).length > 10 ? Math.floor(Number(value) / 1000) : Number(value);
     }
 
-    const parsed = Date.parse(value);
+    const dateOnly = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const parsed = dateOnly
+      ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0).getTime()
+      : Date.parse(value);
+
     return Number.isNaN(parsed) ? '' : Math.floor(parsed / 1000);
   }
 
@@ -54,12 +58,19 @@ const FlipTrackerProLogImportService = (() => {
     return timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString();
   }
 
-  function getLogId(log) {
-    return String(log.id || log.log_id || log.logId || `${log.timestamp || log.time || Date.now()}-${log.message || log.title || ''}`);
-  }
-
   function getLogText(log) {
     return String(log.message || log.text || log.title || log.event || log.log || log.data || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function getLogId(log) {
+    const candidate = String(log.id || log.log_id || log.logId || '');
+    const requiredIds = getRequiredLogTypeIds().map(String);
+
+    if (candidate && !requiredIds.includes(candidate)) {
+      return candidate;
+    }
+
+    return String(`${log.timestamp || log.time || Date.now()}-${getLogText(log) || log.title || ''}`);
   }
 
   function getLogTimestamp(log) {
@@ -273,6 +284,7 @@ const FlipTrackerProLogImportService = (() => {
       classifiedSales: 0,
       warnings: [],
       errors: [],
+      diagnosticMessage: '',
       debug: {}
     };
   }
@@ -282,54 +294,129 @@ const FlipTrackerProLogImportService = (() => {
     const serviceDebug = result && result.debug ? result.debug : {};
 
     return {
+      appVersion: serviceDebug.appVersion || '',
       requiredLogTypeIds: getRequiredLogTypeIds(result),
       logIdFilteringAttempted: Boolean(serviceDebug.logIdFilteringAttempted),
+      unfilteredRequestAttempted: Boolean(serviceDebug.unfilteredRequestAttempted),
+      filteredRequestAttempted: Boolean(serviceDebug.filteredRequestAttempted),
       strategyUsed: serviceDebug.strategyUsed || result.strategyUsed || 'failed-other',
+      rangeUsed: serviceDebug.rangeUsed || summary.rangeUsed || '',
       lastEndpoint: request.endpoint || serviceDebug.lastEndpoint || '',
       lastSelections: request.selections || serviceDebug.lastSelections || '',
       lastParams: request.params || serviceDebug.lastParams || {},
-      lastErrorCode: result && result.code ? result.code : serviceDebug.lastErrorCode || '',
-      lastError: result && result.error ? result.error : serviceDebug.lastError || '',
+      responseTopLevelKeys: serviceDebug.responseTopLevelKeys || [],
       rawLogsReturned: summary.rawLogsReturned || serviceDebug.rawLogsReturned || 0,
       normalizedLogs: summary.normalizedLogs || serviceDebug.normalizedLogs || 0,
       logsReturned: summary.logsReturned || serviceDebug.logsReturned || 0,
+      sampleRawKeys: serviceDebug.sampleRawKeys || [],
+      normalizerFailed: Boolean(serviceDebug.normalizerFailed),
+      diagnosticMessage: summary.diagnosticMessage || serviceDebug.diagnosticMessage || '',
+      firstLogs: serviceDebug.firstLogs || [],
+      firstLogTexts: serviceDebug.firstLogTexts || [],
       classifiedPurchases: summary.classifiedPurchases || 0,
       classifiedSales: summary.classifiedSales || 0,
       duplicatesSkipped: summary.duplicatesSkipped || 0,
       purchasesImported: summary.purchasesImported || 0,
       salesImported: summary.salesImported || 0,
       unmatchedSales: summary.unmatchedSales || 0,
+      lastErrorCode: result && result.code ? result.code : serviceDebug.lastErrorCode || '',
+      lastError: result && result.error ? result.error : serviceDebug.lastError || '',
       updatedAt: new Date().toISOString()
     };
   }
 
-  async function importLogs(storagePrefix, { from = '', to = '' } = {}) {
+  function getDateRange(options = {}) {
+    if (options.from || options.to) {
+      return {
+        from: toTimestamp(options.from),
+        to: toTimestamp(options.to, { endOfDay: true }),
+        rangeUsed: options.from && options.to && options.from === options.to ? 'selected-day-end-of-day' : 'selected-range'
+      };
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      from: now - (24 * 60 * 60),
+      to: now,
+      rangeUsed: 'latest-24-hours'
+    };
+  }
+
+  function getFallbackSevenDayRange() {
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      from: now - (7 * 24 * 60 * 60),
+      to: now,
+      rangeUsed: 'fallback-7-days'
+    };
+  }
+
+  function applyDiagnostic(summary, result) {
+    if (!summary.ok && String(summary.errors.join(' ')).toLowerCase().includes('permission')) {
+      summary.diagnosticMessage = 'Key lacks user -> log permission or the required log categories/types.';
+      return summary;
+    }
+
+    if (summary.rawLogsReturned === 0) {
+      summary.diagnosticMessage = summary.from || summary.to ? 'Date range returned no raw logs.' : 'API returned 0 raw logs.';
+      return summary;
+    }
+
+    if (result && result.debug && result.debug.normalizerFailed) {
+      summary.diagnosticMessage = 'Logs returned but normalizer failed.';
+      return summary;
+    }
+
+    if (summary.classifiedPurchases === 0 && summary.classifiedSales === 0) {
+      summary.diagnosticMessage = 'API returned logs, but none matched buy/sell patterns.';
+      return summary;
+    }
+
+    if (summary.purchasesImported === 0 && summary.salesImported === 0) {
+      summary.diagnosticMessage = 'No new purchases or sales were imported. They may already be imported as duplicates.';
+    }
+
+    return summary;
+  }
+
+  async function importLogs(storagePrefix, options = {}) {
     const storageService = getStorageService();
     const tornApiService = getTornApiService();
     const accountingService = getAccountingService();
-    const summary = createEmptySummary(from, to);
+    let range = getDateRange(options);
+    const summary = createEmptySummary(range.from, range.to);
+    summary.rangeUsed = range.rangeUsed;
 
     if (!storageService || !tornApiService || typeof tornApiService.fetchUserLogs !== 'function') {
       return { ...summary, ok: false, errors: ['Log import services are unavailable.'] };
     }
 
-    const result = await tornApiService.fetchUserLogs(storagePrefix, {
-      from: toTimestamp(from),
-      to: toTimestamp(to),
-      bypassCache: true
+    let result = await tornApiService.fetchUserLogs(storagePrefix, {
+      from: range.from,
+      to: range.to,
+      bypassCache: true,
+      rangeUsed: range.rangeUsed
     });
+
+    if (result.ok && Array.isArray(result.data) && result.data.length === 0 && !options.from && !options.to) {
+      range = getFallbackSevenDayRange();
+      summary.from = range.from;
+      summary.to = range.to;
+      summary.rangeUsed = range.rangeUsed;
+      result = await tornApiService.fetchUserLogs(storagePrefix, {
+        from: range.from,
+        to: range.to,
+        bypassCache: true,
+        rangeUsed: range.rangeUsed
+      });
+    }
 
     if (!result.ok) {
       summary.ok = false;
       summary.errors = [result.error || 'Could not fetch Torn logs.'];
       summary.debug = buildImportDebug(result, summary);
-      storageService.update(storagePrefix, (data) => ({
-        ...data,
-        settings: {
-          ...data.settings,
-          logImportDebug: summary.debug
-        }
-      }));
+      applyDiagnostic(summary, result);
+      storageService.update(storagePrefix, (data) => ({ ...data, settings: { ...data.settings, logImportDebug: summary.debug } }));
       return summary;
     }
 
@@ -397,7 +484,6 @@ const FlipTrackerProLogImportService = (() => {
           }
 
           const sale = storageService.normalizeSale(saleRecord);
-
           purchaseLots = accountingResult.purchaseLots;
           sales = [sale, ...sales];
           importedLogIds.add(logId);
@@ -410,11 +496,9 @@ const FlipTrackerProLogImportService = (() => {
         }
       });
 
+      applyDiagnostic(summary, result);
       summary.debug = buildImportDebug(result, summary);
-      const historyEntry = storageService.normalizeImportHistoryEntry({
-        ...summary,
-        createdAt: now
-      });
+      const historyEntry = storageService.normalizeImportHistoryEntry({ ...summary, createdAt: now });
 
       return {
         ...data,
@@ -434,10 +518,7 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function runParserSelfTest() {
-    return parserSamples.map((sample) => ({
-      sample,
-      parsed: parseItemMarketPurchase(sample)
-    }));
+    return parserSamples.map((sample) => ({ sample, parsed: parseItemMarketPurchase(sample) }));
   }
 
   return {
