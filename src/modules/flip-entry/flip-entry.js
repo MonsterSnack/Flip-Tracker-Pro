@@ -29,7 +29,28 @@ const FlipTrackerProFlipEntry = (() => {
     const storageService = getStorageService();
     return storageService && typeof storageService.load === 'function'
       ? storageService.load(storagePrefix)
-      : { purchaseLots: [], settings: {} };
+      : { itemPriceSnapshots: [], purchaseLots: [], settings: {} };
+  }
+
+  function escapeHtml(value) {
+    return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
+      ? window.FlipTrackerProHtml.escapeHtml(value)
+      : String(value ?? '');
+  }
+
+  function getItemOptions(storagePrefix) {
+    const data = getAppData(storagePrefix);
+    const byName = new Map();
+
+    (data.itemPriceSnapshots || []).forEach((item) => {
+      const itemName = String(item.itemName || '').trim();
+
+      if (itemName) {
+        byName.set(itemName.toLowerCase(), { itemId: item.itemId || '', itemName });
+      }
+    });
+
+    return [...byName.values()].sort((left, right) => left.itemName.localeCompare(right.itemName));
   }
 
   function getRemainingQuantity(lot) {
@@ -38,16 +59,18 @@ const FlipTrackerProFlipEntry = (() => {
     return Math.max(0, Number.isFinite(remainingQuantity) ? remainingQuantity : quantity);
   }
 
-  function getOpenHoldingQuantity(purchaseLots, itemName) {
+  function getOpenHoldingQuantity(purchaseLots, itemName, itemId) {
     const targetName = String(itemName || '').trim().toLowerCase();
+    const targetId = itemId ? String(itemId) : '';
 
-    if (!targetName) {
+    if (!targetName && !targetId) {
       return 0;
     }
 
     return purchaseLots.reduce((total, lot) => {
       const lotName = String(lot.itemName || '').trim().toLowerCase();
-      return lotName === targetName ? total + getRemainingQuantity(lot) : total;
+      const lotId = lot.itemId ? String(lot.itemId) : '';
+      return (targetId && lotId === targetId) || (!targetId && lotName === targetName) ? total + getRemainingQuantity(lot) : total;
     }, 0);
   }
 
@@ -56,6 +79,7 @@ const FlipTrackerProFlipEntry = (() => {
     const buyPrice = parseMoney(form.buyPrice.value);
 
     return {
+      itemId: form.itemId.value || undefined,
       itemName: form.itemName.value.trim(),
       quantity: parseQuantity(form.quantity.value),
       unitSellPrice: parseMoney(form.sellPrice.value),
@@ -92,13 +116,13 @@ const FlipTrackerProFlipEntry = (() => {
 
     if (!accountingService || typeof accountingService.matchSale !== 'function') {
       return {
-        holdingQuantity: getOpenHoldingQuantity(data.purchaseLots, sale.itemName),
+        holdingQuantity: getOpenHoldingQuantity(data.purchaseLots, sale.itemName, sale.itemId),
         preview: createFallbackPreview(sale)
       };
     }
 
     return {
-      holdingQuantity: getOpenHoldingQuantity(data.purchaseLots, sale.itemName),
+      holdingQuantity: getOpenHoldingQuantity(data.purchaseLots, sale.itemName, sale.itemId),
       preview: accountingService.matchSale({
         purchaseLots: data.purchaseLots,
         sale,
@@ -113,10 +137,12 @@ const FlipTrackerProFlipEntry = (() => {
         <h2 data-flip-entry-title>Record Sale</h2>
         <form class="ftp-form" data-flip-entry-form>
           <input name="flipId" type="hidden">
+          <input name="itemId" type="hidden">
 
           <label class="ftp-field">
             <span>Item</span>
-            <input class="ftp-input" name="itemName" type="text" placeholder="Item name" autocomplete="off" required>
+            <input class="ftp-input" name="itemName" type="text" list="ftp-sale-item-options" placeholder="Search item name" autocomplete="off" required>
+            <datalist id="ftp-sale-item-options" data-sale-item-options></datalist>
           </label>
 
           <div class="ftp-form-grid">
@@ -177,6 +203,17 @@ const FlipTrackerProFlipEntry = (() => {
       return;
     }
 
+    const itemOptions = getItemOptions(storagePrefix);
+    const optionsByName = itemOptions.reduce((items, item) => {
+      items[item.itemName.toLowerCase()] = item;
+      return items;
+    }, {});
+    const datalist = form.querySelector('[data-sale-item-options]');
+
+    if (datalist) {
+      datalist.innerHTML = itemOptions.map((item) => `<option value="${escapeHtml(item.itemName)}"></option>`).join('');
+    }
+
     const card = form.closest('.ftp-card');
     const title = card.querySelector('[data-flip-entry-title]');
     const submitButton = form.querySelector('[data-flip-submit-button]');
@@ -187,9 +224,15 @@ const FlipTrackerProFlipEntry = (() => {
     const previewDetail = preview.querySelector('[data-profit-preview-detail]');
     const previewWarning = preview.querySelector('[data-profit-preview-warning]');
 
+    function syncSelectedItem() {
+      const selectedItem = optionsByName[String(form.elements.itemName.value || '').toLowerCase()];
+      form.elements.itemId.value = selectedItem ? selectedItem.itemId : '';
+    }
+
     function resetFormMode() {
       form.reset();
       form.elements.flipId.value = '';
+      form.elements.itemId.value = '';
       form.elements.quantity.value = '1';
       title.textContent = 'Record Sale';
       submitButton.textContent = 'Record sale';
@@ -198,6 +241,7 @@ const FlipTrackerProFlipEntry = (() => {
     }
 
     function updatePreview() {
+      syncSelectedItem();
       const sale = buildSaleDraft(form.elements);
       const result = getSalePreview(storagePrefix, sale);
       const salePreview = result.preview;
@@ -217,6 +261,7 @@ const FlipTrackerProFlipEntry = (() => {
 
     form.loadFlip = (flip) => {
       form.elements.flipId.value = flip.id;
+      form.elements.itemId.value = flip.itemId || '';
       form.elements.itemName.value = flip.itemName || '';
       form.elements.buyPrice.value = flip.buyPrice || (flip.quantity ? (Number(flip.manualBuyCost || flip.matchedBuyCost) || 0) / flip.quantity : 0);
       form.elements.sellPrice.value = flip.sellPrice || flip.unitSellPrice || 0;
