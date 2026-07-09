@@ -30,6 +30,14 @@ const FlipTrackerProBackup = (() => {
     return window.FlipTrackerProLogImportService;
   }
 
+  function getStoredSettings(storagePrefix) {
+    const storageService = getStorageService();
+    const data = storageService && typeof storageService.load === 'function'
+      ? storageService.load(storagePrefix)
+      : { settings: {} };
+    return data.settings || {};
+  }
+
   function getApiState(storagePrefix) {
     const tornApiService = getTornApiService();
 
@@ -37,28 +45,24 @@ const FlipTrackerProBackup = (() => {
       return tornApiService.getStatus(storagePrefix);
     }
 
-    const storageService = getStorageService();
-    const data = storageService && typeof storageService.load === 'function'
-      ? storageService.load(storagePrefix)
-      : { settings: {} };
-    const settings = data.settings || {};
+    const settings = getStoredSettings(storagePrefix);
     const hasKey = Boolean(settings.apiKey);
 
     return {
+      connected: Boolean(settings.apiEnabled && hasKey),
+      diagnostics: settings.apiDiagnostics || {},
       enabled: Boolean(settings.apiEnabled && hasKey),
       hasKey,
+      lastError: settings.apiLastError || '',
+      lastErrorCode: settings.apiLastErrorCode || '',
+      lastRequest: settings.apiLastRequest || {},
       maskedKey: hasKey ? 'Saved' : '',
-      status: hasKey && settings.apiEnabled ? 'ready' : 'disabled',
-      lastError: settings.apiLastError || ''
+      status: hasKey && settings.apiEnabled ? 'ready' : 'disabled'
     };
   }
 
   function getLastImportText(storagePrefix) {
-    const storageService = getStorageService();
-    const data = storageService && typeof storageService.load === 'function'
-      ? storageService.load(storagePrefix)
-      : { settings: {} };
-    const value = data.settings && data.settings.logImportLastRunAt;
+    const value = getStoredSettings(storagePrefix).logImportLastRunAt;
 
     if (!value) {
       return 'Log import has not run yet.';
@@ -66,6 +70,46 @@ const FlipTrackerProBackup = (() => {
 
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? 'Last import date is unknown.' : `Last import ${date.toLocaleString()}.`;
+  }
+
+  function getLogImportDebug(storagePrefix) {
+    return getStoredSettings(storagePrefix).logImportDebug || {};
+  }
+
+  function getPermissionText(value) {
+    if (value === true) {
+      return 'Looks available';
+    }
+
+    if (value === false) {
+      return 'Not shown by key info';
+    }
+
+    return 'Unknown until Torn returns selections';
+  }
+
+  function renderApiDiagnostics(apiState) {
+    const diagnostics = apiState.diagnostics || {};
+    const keyInfoText = diagnostics.keyInfoWorks ? 'key -> info works' : diagnostics.checkedAt ? 'key -> info did not work' : 'Not checked yet';
+    const lastError = apiState.lastError || diagnostics.lastError || 'None';
+    const lastErrorCode = apiState.lastErrorCode || diagnostics.lastErrorCode || 'None';
+    const connectionText = apiState.connected ? 'API connected' : apiState.hasKey ? 'Key saved, API not connected' : 'Not connected';
+    const logExplanation = diagnostics.userLog === false
+      ? 'Log import cannot run until the custom key includes user -> log and the needed log categories/types.'
+      : 'Log import needs user -> log plus item market/bazaar/trade log categories if Torn asks for them.';
+
+    return `
+      <div class="ftp-profit-preview" data-api-diagnostics>
+        <span>API diagnostics</span>
+        <small>Status: ${escapeHtml(connectionText)}</small>
+        <small>Key check: ${escapeHtml(keyInfoText)}</small>
+        <small>Key access level: ${escapeHtml(diagnostics.accessLevel || 'Unknown')}</small>
+        <small>Item prices permission: ${escapeHtml(getPermissionText(diagnostics.itemPrices))}</small>
+        <small>Log import permission: ${escapeHtml(getPermissionText(diagnostics.userLog))}</small>
+        <small>Last API error: ${escapeHtml(String(lastErrorCode))} ${escapeHtml(lastError)}</small>
+        <small>${escapeHtml(logExplanation)}</small>
+      </div>
+    `;
   }
 
   function renderImportSummary(summary) {
@@ -90,15 +134,43 @@ const FlipTrackerProBackup = (() => {
     `;
   }
 
+  function renderLogImportDebug(debug = {}) {
+    const params = debug.lastParams && typeof debug.lastParams === 'object'
+      ? JSON.stringify(debug.lastParams)
+      : '{}';
+
+    return `
+      <details class="ftp-profit-preview" data-log-import-debug>
+        <summary>Import debug</summary>
+        <small>Endpoint: ${escapeHtml(debug.lastEndpoint || 'Not requested yet')}</small>
+        <small>Selection: ${escapeHtml(debug.lastSelections || 'None')}</small>
+        <small>Params: ${escapeHtml(params)}</small>
+        <small>Last error: ${escapeHtml(String(debug.lastErrorCode || 'None'))} ${escapeHtml(debug.lastError || '')}</small>
+        <small>Logs returned: ${escapeHtml(debug.logsReturned || 0)}</small>
+        <small>Classified purchases: ${escapeHtml(debug.classifiedPurchases || 0)}</small>
+        <small>Classified sales: ${escapeHtml(debug.classifiedSales || 0)}</small>
+        <small>Duplicates skipped: ${escapeHtml(debug.duplicatesSkipped || 0)}</small>
+        <small>Unmatched sales: ${escapeHtml(debug.unmatchedSales || 0)}</small>
+      </details>
+    `;
+  }
+
   function renderApiSettings(storagePrefix) {
     const apiState = getApiState(storagePrefix);
-    const statusText = apiState.lastError || (apiState.enabled ? 'API ready' : apiState.hasKey ? 'API key saved, currently disabled' : 'No API key saved');
-    const statusKind = apiState.status === 'error' || apiState.lastError ? 'error' : apiState.enabled ? 'success' : 'info';
+    const statusText = apiState.lastError || (apiState.connected ? 'API connected' : apiState.hasKey ? 'API key saved, currently disabled or unchecked' : 'No API key saved');
+    const statusKind = apiState.status === 'error' || apiState.lastError ? 'error' : apiState.connected ? 'success' : 'info';
 
     return `
       <section class="ftp-card" data-api-settings-section>
         <h2>Torn API</h2>
         <p>Your API key is stored locally in your browser only and is used only to request read-only data from Torn.</p>
+
+        <div class="ftp-profit-preview">
+          <span>Recommended key type: Custom</span>
+          <small>Only select what Flip Tracker Pro needs: key -> info, user -> log, torn -> items, and market -> itemmarket if Torn supports it for your key.</small>
+          <small>For automatic log import, your custom key must include user -> log and the relevant item market/bazaar/trade log categories/types if Torn asks for log categories.</small>
+          <small>Your key is stored locally in your browser only. Your key is only sent to Torn API endpoints. No Torn password is ever required.</small>
+        </div>
 
         <label class="ftp-field">
           <span>API enabled</span>
@@ -121,22 +193,22 @@ const FlipTrackerProBackup = (() => {
         </div>
 
         <div class="ftp-form-actions ftp-backup-actions">
+          <button class="ftp-secondary-button" type="button" data-get-custom-api-key>Get custom API key</button>
           <button class="ftp-primary-button" type="button" data-save-api-key>Save API key</button>
+          <button class="ftp-secondary-button" type="button" data-check-api-key>Check key permissions</button>
           <button class="ftp-secondary-button" type="button" data-refresh-api-prices>Refresh item prices</button>
           <button class="ftp-danger-button" type="button" data-clear-api-key>Clear API key</button>
         </div>
 
         <p class="ftp-status" data-status="${statusKind}" data-api-status-message>${escapeHtml(statusText)}</p>
-
-        <div class="ftp-profit-preview">
-          <span>API privacy and rules</span>
-          <small>Item prices require market/item data. Automatic buy/sell import requires user log access. Flip Tracker Pro is read-only. Your API key is saved locally only and is only sent to Torn API endpoints. No password is ever required. You can clear the key at any time.</small>
-        </div>
+        ${renderApiDiagnostics(apiState)}
       </section>
     `;
   }
 
   function renderLogImport(storagePrefix, importSummary) {
+    const debug = importSummary && importSummary.debug ? importSummary.debug : getLogImportDebug(storagePrefix);
+
     return `
       <section class="ftp-card" data-log-import-section>
         <h2>Import Logs</h2>
@@ -161,6 +233,7 @@ const FlipTrackerProBackup = (() => {
 
         <p class="ftp-status" data-status="info" data-log-import-status>${escapeHtml(getLastImportText(storagePrefix))}</p>
         ${renderImportSummary(importSummary)}
+        ${renderLogImportDebug(debug)}
       </section>
     `;
   }
@@ -234,6 +307,30 @@ const FlipTrackerProBackup = (() => {
       }
     }
 
+    function updateApiDiagnostics() {
+      if (!apiSection) {
+        return;
+      }
+
+      const existingDiagnostics = apiSection.querySelector('[data-api-diagnostics]');
+
+      if (existingDiagnostics) {
+        existingDiagnostics.outerHTML = renderApiDiagnostics(getApiState(storagePrefix));
+      }
+    }
+
+    function updateLogImportDebug(debug) {
+      if (!logImportSection) {
+        return;
+      }
+
+      const existingDebug = logImportSection.querySelector('[data-log-import-debug]');
+
+      if (existingDebug) {
+        existingDebug.outerHTML = renderLogImportDebug(debug || getLogImportDebug(storagePrefix));
+      }
+    }
+
     function updateLogImportStatus(status, message, summary) {
       if (!logImportSection) {
         return;
@@ -253,6 +350,7 @@ const FlipTrackerProBackup = (() => {
 
       if (summary) {
         logImportSection.insertAdjacentHTML('beforeend', renderImportSummary(summary));
+        updateLogImportDebug(summary.debug);
       }
     }
 
@@ -280,9 +378,21 @@ const FlipTrackerProBackup = (() => {
     if (apiSection) {
       const enabledSelect = apiSection.querySelector('[data-api-enabled]');
       const keyInput = apiSection.querySelector('[data-api-key-input]');
+      const getKeyButton = apiSection.querySelector('[data-get-custom-api-key]');
       const saveKeyButton = apiSection.querySelector('[data-save-api-key]');
+      const checkKeyButton = apiSection.querySelector('[data-check-api-key]');
       const clearKeyButton = apiSection.querySelector('[data-clear-api-key]');
       const refreshPricesButton = apiSection.querySelector('[data-refresh-api-prices]');
+
+      if (getKeyButton) {
+        getKeyButton.addEventListener('click', () => {
+          const url = tornApiService && typeof tornApiService.getCustomKeyBuilderUrl === 'function'
+            ? tornApiService.getCustomKeyBuilderUrl()
+            : 'https://www.torn.com/api.html';
+          window.open(url, '_blank', 'noopener,noreferrer');
+          emitNotice('info', 'Create custom key', 'On Torn, choose a Custom key with key -> info, user -> log, torn -> items, and market -> itemmarket if available.');
+        });
+      }
 
       if (enabledSelect) {
         enabledSelect.addEventListener('change', () => {
@@ -293,6 +403,7 @@ const FlipTrackerProBackup = (() => {
 
           const result = tornApiService.setEnabled(storagePrefix, enabledSelect.value === 'true');
           updateApiStatus(result.enabled ? 'success' : result.hasKey ? 'info' : 'error', result.message);
+          updateApiDiagnostics();
           emitNotice(result.enabled ? 'success' : result.hasKey ? 'info' : 'warning', 'API settings', result.message);
         });
       }
@@ -308,7 +419,33 @@ const FlipTrackerProBackup = (() => {
           keyInput.value = '';
           keyInput.placeholder = result.maskedKey || 'Paste API key';
           updateApiStatus(result.ok ? 'success' : 'error', result.message);
+          updateApiDiagnostics();
           emitNotice(result.ok ? 'success' : 'error', 'API key', result.message);
+        });
+      }
+
+      if (checkKeyButton) {
+        checkKeyButton.addEventListener('click', async () => {
+          if (!tornApiService || typeof tornApiService.fetchKeyInfo !== 'function') {
+            updateApiStatus('error', 'API diagnostics are unavailable.');
+            return;
+          }
+
+          checkKeyButton.disabled = true;
+          updateApiStatus('info', 'Checking key permissions...');
+
+          try {
+            const result = await tornApiService.fetchKeyInfo(storagePrefix, { bypassCache: true });
+            const message = result.ok ? 'Key permissions checked.' : result.error || 'Could not check key permissions.';
+            updateApiStatus(result.ok ? 'success' : 'error', message);
+            updateApiDiagnostics();
+            emitNotice(result.ok ? 'success' : 'warning', 'API diagnostics', message);
+          } catch (error) {
+            updateApiStatus('error', error.message || 'Could not check key permissions.');
+            emitNotice('error', 'API diagnostics', error.message || 'Could not check key permissions.');
+          } finally {
+            checkKeyButton.disabled = false;
+          }
         });
       }
 
@@ -328,6 +465,7 @@ const FlipTrackerProBackup = (() => {
             enabledSelect.value = 'false';
           }
           updateApiStatus('info', result.message);
+          updateApiDiagnostics();
           emitNotice('info', 'API key cleared', result.message);
         });
       }
@@ -343,7 +481,7 @@ const FlipTrackerProBackup = (() => {
           updateApiStatus('info', 'Refreshing item prices...');
 
           try {
-            const result = await tornApiService.fetchItemPrices(storagePrefix);
+            const result = await tornApiService.fetchItemPrices(storagePrefix, { bypassCache: true });
 
             if (!result.ok) {
               throw new Error(result.error || 'Could not refresh item prices.');
@@ -351,6 +489,7 @@ const FlipTrackerProBackup = (() => {
 
             const snapshots = Array.isArray(result.data) ? result.data : [];
             updateApiStatus('success', `Updated ${snapshots.length} item prices.`);
+            updateApiDiagnostics();
             emitNotice('success', 'Prices updated', `Updated ${snapshots.length} item prices.`);
 
             if (typeof onImport === 'function') {
@@ -358,6 +497,7 @@ const FlipTrackerProBackup = (() => {
             }
           } catch (error) {
             updateApiStatus('error', error.message || 'Could not refresh item prices.');
+            updateApiDiagnostics();
             emitNotice('error', 'API error', error.message || 'Could not refresh item prices.');
           } finally {
             refreshPricesButton.disabled = false;
