@@ -110,12 +110,14 @@ const FlipTrackerProStorageService = (() => {
     const totalBuyPrice = toNumber(lot.totalBuyPrice, toNumber(lot.totalCost, unitBuyPrice * quantity));
     const now = new Date().toISOString();
     const remainingQuantity = toRemainingQuantity(lot.remainingQuantity, quantity);
+    const itemName = String(lot.itemName || 'Unnamed item');
+    const hasFallbackItemName = Boolean(lot.itemId && /^Item #\d+$/i.test(itemName));
 
     return {
       ...lot,
       id: lot.id || createId(),
       itemId: lot.itemId || undefined,
-      itemName: String(lot.itemName || 'Unnamed item'),
+      itemName,
       quantity,
       unitBuyPrice,
       totalBuyPrice,
@@ -126,7 +128,7 @@ const FlipTrackerProStorageService = (() => {
       source: normalizeSource(lot.source),
       originalLogId: lot.originalLogId ? String(lot.originalLogId) : undefined,
       logTypeId: lot.logTypeId === undefined || lot.logTypeId === '' ? undefined : Number(lot.logTypeId),
-      needsNameReview: Boolean(lot.needsNameReview),
+      needsNameReview: Boolean(lot.needsNameReview || hasFallbackItemName),
       buyPrice: unitBuyPrice,
       unitCost: unitBuyPrice,
       totalCost: totalBuyPrice
@@ -154,6 +156,7 @@ const FlipTrackerProStorageService = (() => {
       textPreview: String(item.textPreview || item.message || item.text || '').slice(0, 320),
       rawKeys: Array.isArray(item.rawKeys) ? item.rawKeys.map(String).slice(0, 40) : [],
       rawSampleKeys: Array.isArray(item.rawSampleKeys) ? item.rawSampleKeys.map(String).slice(0, 40) : [],
+      pipeParts: Array.isArray(item.pipeParts) ? item.pipeParts.map(String).slice(0, 20) : [],
       reason: String(item.reason || 'Parser could not create a valid import candidate.'),
       source: 'api',
       ignored: Boolean(item.ignored),
