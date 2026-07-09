@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '0.8.6-debug';
+const VERSION = '0.8.7';
 const ROOT = path.resolve(__dirname, '..');
 const DIST_PATH = path.join(ROOT, 'dist', 'flip-tracker-pro.user.js');
 
@@ -92,7 +92,8 @@ function stripUserscriptHeader(source) {
   return source
     .replace(/^\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\s*/, '')
     .replace(/0\.7\.5/g, VERSION)
-    .replace(/0\.8\.5/g, VERSION);
+    .replace(/0\.8\.5/g, VERSION)
+    .replace(/0\.8\.6-debug/g, VERSION);
 }
 
 function stripWindowExports(source) {
