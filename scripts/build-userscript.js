@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '0.8.4';
+const VERSION = '0.8.5';
 const ROOT = path.resolve(__dirname, '..');
 const DIST_PATH = path.join(ROOT, 'dist', 'flip-tracker-pro.user.js');
 
