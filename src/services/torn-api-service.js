@@ -223,42 +223,45 @@ const FlipTrackerProTornApiService = (() => {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  function findKnownLogTypeId(raw) {
+  function findKnownLogTypeId(raw, objectKey) {
     const known = new Set(getKnownLogTypeIds().map(Number));
-    const fieldNames = ['logTypeId', 'log_type_id', 'log_id', 'logId', 'type', 'type_id', 'category', 'category_id', 'event', 'event_id'];
-    const queue = [raw];
+    const fieldNames = ['logTypeId', 'log_type_id', 'log', 'log_id', 'logId', 'type', 'type_id', 'category', 'category_id', 'event', 'event_id', 'action', 'action_id'];
+    const directCandidates = [objectKey, raw && raw.logTypeId, raw && raw.log_type_id, raw && raw.log, raw && raw.log_id, raw && raw.logId, raw && raw.type, raw && raw.type_id, raw && raw.category, raw && raw.category_id, raw && raw.event, raw && raw.event_id, raw && raw.action, raw && raw.action_id];
+    for (const candidate of directCandidates) {
+      const id = valueToNumber(candidate);
+      if (known.has(id)) return id;
+    }
+    const queue = [{ value: raw, depth: 0 }];
     let inspected = 0;
-    while (queue.length && inspected < 60) {
-      const value = queue.shift();
+    while (queue.length && inspected < 160) {
+      const next = queue.shift();
       inspected += 1;
-      if (!value || typeof value !== 'object') continue;
-      for (const field of fieldNames) {
-        if (Object.prototype.hasOwnProperty.call(value, field)) {
-          const id = valueToNumber(value[field]);
+      if (!next.value || typeof next.value !== 'object' || next.depth > 4) continue;
+      for (const [field, entry] of Object.entries(next.value).slice(0, 60)) {
+        if (/key|token|secret|password/i.test(field)) continue;
+        const id = valueToNumber(entry);
+        if (fieldNames.includes(field) || /log|type|category|event|action/i.test(field)) {
           if (known.has(id)) return id;
         }
+        if (entry && typeof entry === 'object') queue.push({ value: entry, depth: next.depth + 1 });
       }
-      ['data', 'params', 'details'].forEach((field) => {
-        const next = value[field];
-        if (next && typeof next === 'object') queue.push(next);
-      });
     }
     return 0;
   }
 
   function collectUsefulStrings(value, output = [], depth = 0) {
-    if (output.length >= 32 || depth > 3 || value === null || value === undefined) return output;
+    if (output.length >= 36 || depth > 4 || value === null || value === undefined) return output;
     if (typeof value === 'string' || typeof value === 'number') {
       const text = String(value).replace(/\s+/g, ' ').trim();
-      if (text && text.length <= 220) output.push(text);
+      if (text && text.length <= 260 && !/^\*{4,}$/.test(text)) output.push(text);
       return output;
     }
     if (Array.isArray(value)) {
-      value.slice(0, 12).forEach((entry) => collectUsefulStrings(entry, output, depth + 1));
+      value.slice(0, 14).forEach((entry) => collectUsefulStrings(entry, output, depth + 1));
       return output;
     }
     if (typeof value === 'object') {
-      Object.entries(value).slice(0, 24).forEach(([key, entry]) => {
+      Object.entries(value).slice(0, 32).forEach(([key, entry]) => {
         if (/key|token|secret|password/i.test(key)) return;
         collectUsefulStrings(entry, output, depth + 1);
       });
@@ -274,7 +277,7 @@ const FlipTrackerProTornApiService = (() => {
     collectUsefulStrings(raw.params, pieces);
     collectUsefulStrings(raw.details, pieces);
     if (!direct) collectUsefulStrings(raw, pieces);
-    return [...new Set(pieces)].join(' | ').replace(/\s+/g, ' ').trim().slice(0, 1200);
+    return [...new Set(pieces)].join(' | ').replace(/\s+/g, ' ').trim().slice(0, 1500);
   }
 
   function looksLikeLog(value) {
@@ -285,22 +288,24 @@ const FlipTrackerProTornApiService = (() => {
 
   function normalizeLog(rawLog, objectKey) {
     const raw = rawLog && typeof rawLog === 'object' ? rawLog : { message: String(rawLog || '') };
-    const entryId = String(raw.entryId || raw.entry_id || raw.id || raw.ID || objectKey || `${raw.timestamp || raw.time || raw.date || Date.now()}-${Math.random().toString(16).slice(2)}`);
-    const logTypeId = findKnownLogTypeId(raw);
+    const entryId = String(raw.entryId || raw.entry_id || raw.id || raw.ID || raw.logEntryId || raw.log_entry_id || objectKey || `${raw.timestamp || raw.time || raw.date || Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const logTypeId = findKnownLogTypeId(raw, objectKey);
     const text = buildLogText(raw);
+    const rawKeys = Object.keys(raw).slice(0, 40);
     return {
       entryId,
       id: entryId,
       originalLogId: entryId,
       logTypeId,
-      timestamp: raw.timestamp || raw.time || raw.created_at || raw.date || '',
+      timestamp: raw.timestamp || raw.time || raw.created_at || raw.createdAt || raw.date || '',
       title: String(raw.title || ''),
       message: text,
       text,
       data: raw.data && typeof raw.data === 'object' ? raw.data : {},
       params: raw.params && typeof raw.params === 'object' ? raw.params : {},
-      rawSampleKeys: Object.keys(raw).slice(0, 24),
-      rawKeys: Object.keys(raw).slice(0, 24)
+      raw,
+      rawSampleKeys: rawKeys,
+      rawKeys
     };
   }
 
@@ -326,7 +331,7 @@ const FlipTrackerProTornApiService = (() => {
   }
 
   function sanitizeLog(log) {
-    return { entryId: log.entryId, logTypeId: log.logTypeId || '', timestamp: log.timestamp || '', textPreview: String(log.text || log.message || '').slice(0, 220), rawKeys: log.rawSampleKeys || log.rawKeys || [] };
+    return { entryId: log.entryId, logTypeId: log.logTypeId || '', timestamp: log.timestamp || '', textPreview: String(log.text || log.message || '').slice(0, 240), rawKeys: log.rawSampleKeys || log.rawKeys || [] };
   }
 
   function getIdCounts(logs) {
@@ -343,6 +348,7 @@ const FlipTrackerProTornApiService = (() => {
   function buildLogDebug({ result, payload, logs, normalizeMs = 0, strategyUsed, rangeUsed = '' }) {
     const rawLogCount = getRawLogCount(payload);
     const idCounts = getIdCounts(logs);
+    const recognizedLogs = logs.filter((log) => Number(log.logTypeId) && getKnownLogTypeIds().includes(Number(log.logTypeId)));
     return {
       appVersion: getConfig().version || '',
       buyLogIds: getBuyLogIds(),
@@ -362,6 +368,7 @@ const FlipTrackerProTornApiService = (() => {
       buyIdMatches: idCounts.buyIdMatches,
       sellIdMatches: idCounts.sellIdMatches,
       firstLogs: logs.slice(0, 5).map(sanitizeLog),
+      firstRecognizedLogs: recognizedLogs.slice(0, 5).map(sanitizeLog),
       firstLogTexts: logs.slice(0, 5).map((log) => log.text || log.message).filter(Boolean),
       sampleRawKeys: logs[0] ? (logs[0].rawSampleKeys || []) : [],
       normalizerFailed: rawLogCount > 0 && logs.length === 0,
@@ -370,12 +377,19 @@ const FlipTrackerProTornApiService = (() => {
       lastError: result.error || '',
       classifiedPurchases: 0,
       classifiedSales: 0,
+      buyCandidatesCreated: 0,
+      sellCandidatesCreated: 0,
       textBuyMatches: 0,
       textSellMatches: 0,
       duplicatesSkipped: 0,
       purchasesImported: 0,
       salesImported: 0,
+      purchasesSaved: 0,
+      salesSaved: 0,
       unmatchedSales: 0,
+      reviewCandidatesCreated: 0,
+      parserFailures: 0,
+      validationFailures: 0,
       timings: { fetchMs: result.timing && result.timing.fetchMs || 0, normalizeMs, classifyMs: 0, parseMs: 0, storageSaveMs: 0, totalImportMs: 0 },
       updatedAt: new Date().toISOString()
     };
@@ -383,10 +397,13 @@ const FlipTrackerProTornApiService = (() => {
 
   async function fetchItemPrices(storagePrefix, { bypassCache = false } = {}) {
     const result = await request(storagePrefix, 'itemPrices', { section: 'torn', selections: 'items', bypassCache });
-    if (!result.ok) return result;
+    if (!result.ok) {
+      updateSettings(storagePrefix, { itemPriceApiStatus: 'error', itemPriceApiLastError: 'Item price refresh failed.', apiLastRequest: result.request || {} });
+      return { ...result, error: 'Item price refresh failed.' };
+    }
     const snapshots = normalizeItemSnapshots(result.data);
     const storageService = getStorageService();
-    if (storageService && snapshots.length > 0) storageService.update(storagePrefix, (data) => ({ ...data, itemPriceSnapshots: snapshots }));
+    if (storageService && snapshots.length > 0) storageService.update(storagePrefix, (data) => ({ ...data, itemPriceSnapshots: snapshots, settings: { ...data.settings, itemPriceApiStatus: 'ready', itemPriceApiLastError: '' } }));
     return { ...result, data: snapshots };
   }
 
@@ -398,12 +415,12 @@ const FlipTrackerProTornApiService = (() => {
     const result = await request(storagePrefix, 'logs', { section: 'user', selections: 'log', params, bypassCache: true });
     if (!result.ok) {
       const debug = buildLogDebug({ result, payload: {}, logs: [], normalizeMs: 0, strategyUsed: Number(result.code) === 16 ? 'failed-permission' : 'failed-other', rangeUsed });
-      updateSettings(storagePrefix, { logImportDebug: debug });
+      updateSettings(storagePrefix, { logImportDebug: debug, logApiStatus: 'error', logApiLastError: result.error || '' });
       return { ...result, debug, buyLogIds: getBuyLogIds(), sellLogIds: getSellLogIds(), strategyUsed: debug.strategyUsed };
     }
     const normalized = normalizeLogs(result.data);
     const debug = buildLogDebug({ result, payload: result.data, logs: normalized.logs, normalizeMs: normalized.normalizeMs, strategyUsed: 'unfiltered', rangeUsed });
-    updateSettings(storagePrefix, { logImportDebug: debug });
+    updateSettings(storagePrefix, { logImportDebug: debug, logApiStatus: 'ready', logApiLastError: '' });
     return { ...result, data: normalized.logs, debug, buyLogIds: getBuyLogIds(), sellLogIds: getSellLogIds(), strategyUsed: 'unfiltered' };
   }
 
@@ -411,20 +428,21 @@ const FlipTrackerProTornApiService = (() => {
     const result = await request(storagePrefix, 'logs', { section: 'user', selections: 'log', params: { _: Date.now() }, bypassCache: true });
     if (!result.ok) {
       const debug = buildLogDebug({ result, payload: {}, logs: [], normalizeMs: 0, strategyUsed: Number(result.code) === 16 ? 'failed-permission' : 'failed-other', rangeUsed: 'raw-unfiltered-no-date' });
-      updateSettings(storagePrefix, { logImportDebug: debug });
+      updateSettings(storagePrefix, { logImportDebug: debug, logApiStatus: 'error', logApiLastError: result.error || '' });
       return { ...result, debug };
     }
     const normalized = normalizeLogs(result.data);
     const debug = buildLogDebug({ result, payload: result.data, logs: normalized.logs, normalizeMs: normalized.normalizeMs, strategyUsed: 'raw-unfiltered-test', rangeUsed: 'raw-unfiltered-no-date' });
-    updateSettings(storagePrefix, { logImportDebug: debug });
+    updateSettings(storagePrefix, { logImportDebug: debug, logApiStatus: 'ready', logApiLastError: '' });
     return { ...result, data: normalized.logs, debug };
   }
 
   async function fetchKeyInfo(storagePrefix, { bypassCache = true } = {}) {
     const result = await request(storagePrefix, 'keyInfo', { section: 'key', selections: 'info', bypassCache });
-    const diagnostics = result.ok ? { checkedAt: new Date().toISOString(), keyInfoWorks: true, accessLevel: String(result.data && result.data.access_level || result.data && result.data.key && (result.data.key.access_level || result.data.key.type) || 'Unknown'), userLog: 'unknown', itemPrices: 'unknown', lastErrorCode: '', lastError: '' } : { checkedAt: new Date().toISOString(), keyInfoWorks: false, accessLevel: 'Unknown', userLog: false, itemPrices: false, lastErrorCode: result.code || '', lastError: result.error || 'Could not check key permissions.' };
-    updateSettings(storagePrefix, { apiDiagnostics: diagnostics });
-    return { ...result, diagnostics };
+    const wrongFields = String(result.error || '').toLowerCase().includes('wrong fields');
+    const diagnostics = result.ok ? { checkedAt: new Date().toISOString(), keyInfoWorks: true, keyDiagnosticsStatus: 'ready', accessLevel: String(result.data && result.data.access_level || result.data && result.data.key && (result.data.key.access_level || result.data.key.type) || 'Unknown'), lastErrorCode: '', lastError: '' } : { checkedAt: new Date().toISOString(), keyInfoWorks: false, keyDiagnosticsStatus: 'error', accessLevel: 'Unknown', lastErrorCode: result.code || '', lastError: wrongFields ? 'Key diagnostics failed, but log import can still be tested.' : result.error || 'Could not check key permissions.' };
+    updateSettings(storagePrefix, { apiDiagnostics: diagnostics, keyDiagnosticsStatus: diagnostics.keyDiagnosticsStatus, keyDiagnosticsLastError: diagnostics.lastError });
+    return { ...result, error: diagnostics.lastError, diagnostics };
   }
 
   function saveApiKey(storagePrefix, apiKey) {
