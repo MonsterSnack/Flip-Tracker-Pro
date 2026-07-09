@@ -193,9 +193,7 @@ const FlipTrackerProTornApiService = (() => {
     }
 
     return new Promise((resolve, reject) => {
-      queue.push({
-        run: () => run().then(resolve).catch(reject)
-      });
+      queue.push({ run: () => run().then(resolve).catch(reject) });
       runQueue();
     });
   }
@@ -247,13 +245,7 @@ const FlipTrackerProTornApiService = (() => {
             });
           }
 
-          return {
-            ok: false,
-            code: apiError.code,
-            error: apiError.message,
-            rawError: apiError.rawMessage,
-            request: sanitizedRequest
-          };
+          return { ok: false, code: apiError.code, error: apiError.message, rawError: apiError.rawMessage, request: sanitizedRequest };
         }
 
         updateSettings(storagePrefix, {
@@ -293,22 +285,39 @@ const FlipTrackerProTornApiService = (() => {
     }));
   }
 
-  function looksLikeLog(value) {
-    return value && typeof value === 'object' && (
-      value.timestamp !== undefined || value.time !== undefined || value.title !== undefined || value.message !== undefined || value.text !== undefined || value.log !== undefined
-    );
+  function getTopLevelKeys(payload) {
+    return payload && typeof payload === 'object' ? Object.keys(payload).slice(0, 30) : [];
   }
 
-  function getLogMessage(log) {
-    return String(log.message || log.text || log.title || log.event || log.log || log.data || '').replace(/\s+/g, ' ').trim();
+  function getUsefulRawMessage(raw) {
+    const fields = ['message', 'text', 'title', 'event', 'log', 'data', 'description', 'details'];
+    const direct = fields.map((field) => raw[field]).find((value) => typeof value === 'string' && value.trim());
+
+    if (direct) {
+      return direct;
+    }
+
+    return Object.entries(raw)
+      .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(' | ')
+      .trim();
+  }
+
+  function looksLikeLog(value) {
+    return value && typeof value === 'object' && (
+      value.timestamp !== undefined || value.time !== undefined || value.date !== undefined || value.created_at !== undefined
+    ) && (
+      value.title !== undefined || value.message !== undefined || value.text !== undefined || value.log !== undefined || value.event !== undefined || value.data !== undefined
+    );
   }
 
   function normalizeLog(log, id) {
     const raw = log && typeof log === 'object' ? log : { message: String(log || '') };
-    const message = getLogMessage(raw);
+    const message = String(getUsefulRawMessage(raw) || '').replace(/\s+/g, ' ').trim();
 
     return {
-      id: String(raw.id || raw.log_id || raw.logId || id || `${raw.timestamp || raw.time || Date.now()}-${message}`),
+      id: String(raw.id || raw.ID || raw.log_id || raw.logId || id || `${raw.timestamp || raw.time || raw.date || Date.now()}-${message}`),
       timestamp: raw.timestamp || raw.time || raw.created_at || raw.date || '',
       type: raw.type || raw.category || raw.cat || raw.logType || raw.log_id || raw.logId || '',
       category: raw.category || raw.cat || raw.type || '',
@@ -341,20 +350,107 @@ const FlipTrackerProTornApiService = (() => {
     return logs;
   }
 
-  function normalizeLogs(payload) {
+  function getRawLogContainer(payload) {
     if (!payload || typeof payload !== 'object') {
-      return [];
+      return null;
     }
 
     if (payload.log || payload.logs) {
-      return collectLogs(payload.log || payload.logs);
+      return payload.log || payload.logs;
     }
 
     if (payload.user && (payload.user.log || payload.user.logs)) {
-      return collectLogs(payload.user.log || payload.user.logs);
+      return payload.user.log || payload.user.logs;
+    }
+
+    return null;
+  }
+
+  function getRawLogCount(payload) {
+    const container = getRawLogContainer(payload);
+
+    if (!container) {
+      return 0;
+    }
+
+    if (Array.isArray(container)) {
+      return container.length;
+    }
+
+    if (typeof container === 'object') {
+      return Object.keys(container).length;
+    }
+
+    return 0;
+  }
+
+  function normalizeLogs(payload) {
+    const container = getRawLogContainer(payload);
+
+    if (container) {
+      return collectLogs(container);
     }
 
     return collectLogs(payload);
+  }
+
+  function sanitizeLog(log) {
+    return {
+      id: log.id,
+      timestamp: log.timestamp,
+      type: log.type,
+      category: log.category,
+      logId: log.logId,
+      title: log.title,
+      message: log.message
+    };
+  }
+
+  function getSampleRawKeys(payload) {
+    const container = getRawLogContainer(payload);
+    const first = Array.isArray(container)
+      ? container[0]
+      : container && typeof container === 'object'
+        ? container[Object.keys(container)[0]]
+        : null;
+
+    return first && typeof first === 'object' ? Object.keys(first).slice(0, 30) : [];
+  }
+
+  function buildLogDebug({ result, payload, logs, attemptedFiltering, unfilteredAttempted, filteredAttempted, requiredLogIds, strategyUsed, rangeUsed = '' }) {
+    const rawLogCount = getRawLogCount(payload);
+    const normalizerFailed = rawLogCount > 0 && logs.length === 0;
+
+    return {
+      appVersion: getConfig().version || '',
+      requiredLogTypeIds: requiredLogIds,
+      logIdFilteringAttempted: Boolean(attemptedFiltering),
+      unfilteredRequestAttempted: Boolean(unfilteredAttempted),
+      filteredRequestAttempted: Boolean(filteredAttempted),
+      strategyUsed,
+      rangeUsed,
+      lastEndpoint: result.request && result.request.endpoint,
+      lastSelections: result.request && result.request.selections,
+      lastParams: result.request && result.request.params,
+      responseTopLevelKeys: getTopLevelKeys(payload),
+      rawLogsReturned: rawLogCount,
+      normalizedLogs: logs.length,
+      logsReturned: logs.length,
+      firstLogs: logs.slice(0, 3).map(sanitizeLog),
+      firstLogTexts: logs.slice(0, 3).map((log) => log.message).filter(Boolean),
+      sampleRawKeys: getSampleRawKeys(payload),
+      normalizerFailed,
+      diagnosticMessage: normalizerFailed ? 'Logs returned but normalizer failed.' : '',
+      lastErrorCode: result.code || '',
+      lastError: result.error || '',
+      classifiedPurchases: 0,
+      classifiedSales: 0,
+      duplicatesSkipped: 0,
+      purchasesImported: 0,
+      salesImported: 0,
+      unmatchedSales: 0,
+      updatedAt: new Date().toISOString()
+    };
   }
 
   function getSelectionStrings(payload) {
@@ -411,51 +507,8 @@ const FlipTrackerProTornApiService = (() => {
     };
   }
 
-  function getLogStrategy(result, attemptedFiltering) {
-    if (result.ok) {
-      return attemptedFiltering ? 'filtered-by-log-ids' : 'fallback-unfiltered';
-    }
-
-    if (Number(result.code) === 16) {
-      return 'failed-permission';
-    }
-
-    if (Number(result.code) === 28) {
-      return 'failed-invalid-log-id';
-    }
-
-    return 'failed-other';
-  }
-
-  function buildLogDebug(result, logs, attemptedFiltering, requiredLogIds) {
-    return {
-      requiredLogTypeIds: requiredLogIds,
-      logIdFilteringAttempted: Boolean(attemptedFiltering),
-      strategyUsed: getLogStrategy(result, attemptedFiltering),
-      lastEndpoint: result.request && result.request.endpoint,
-      lastSelections: result.request && result.request.selections,
-      lastParams: result.request && result.request.params,
-      lastErrorCode: result.code || '',
-      lastError: result.error || '',
-      rawLogsReturned: Array.isArray(logs) ? logs.length : 0,
-      normalizedLogs: Array.isArray(logs) ? logs.length : 0,
-      logsReturned: Array.isArray(logs) ? logs.length : 0,
-      classifiedPurchases: 0,
-      classifiedSales: 0,
-      duplicatesSkipped: 0,
-      purchasesImported: 0,
-      salesImported: 0,
-      unmatchedSales: 0,
-      updatedAt: new Date().toISOString()
-    };
-  }
-
   async function fetchItemPrices(storagePrefix, { bypassCache = false } = {}) {
-    const result = await request(storagePrefix, 'itemPrices', {
-      section: 'torn',
-      selections: 'items',
-      bypassCache
-    });
+    const result = await request(storagePrefix, 'itemPrices', { section: 'torn', selections: 'items', bypassCache });
 
     if (!result.ok) {
       return result;
@@ -465,16 +518,13 @@ const FlipTrackerProTornApiService = (() => {
     const storageService = getStorageService();
 
     if (storageService && snapshots.length > 0) {
-      storageService.update(storagePrefix, (data) => ({
-        ...data,
-        itemPriceSnapshots: snapshots
-      }));
+      storageService.update(storagePrefix, (data) => ({ ...data, itemPriceSnapshots: snapshots }));
     }
 
     return { ...result, data: snapshots };
   }
 
-  async function fetchUserLogs(storagePrefix, { from = '', to = '', bypassCache = true } = {}) {
+  async function fetchUserLogs(storagePrefix, { from = '', to = '', bypassCache = true, useLogIdFilter = false, rangeUsed = '' } = {}) {
     const requiredLogIds = getRequiredLogTypeIds();
     const baseParams = {};
 
@@ -490,48 +540,105 @@ const FlipTrackerProTornApiService = (() => {
       baseParams._ = Date.now();
     }
 
-    const filteredResult = await request(storagePrefix, 'logs', {
-      section: 'user',
-      selections: 'log',
-      params: {
-        ...baseParams,
-        log: requiredLogIds.join(',')
-      },
-      bypassCache
-    });
+    const settings = getSettings(storagePrefix);
+    const shouldTryFilteredFirst = Boolean(useLogIdFilter || settings.debugUseLogIdFilter);
+    let result;
+    let attemptedFiltering = false;
+    let filteredAttempted = false;
+    let unfilteredAttempted = false;
+    let strategyUsed = 'unfiltered';
 
-    let result = filteredResult;
-    let attemptedFiltering = true;
+    if (shouldTryFilteredFirst) {
+      filteredAttempted = true;
+      attemptedFiltering = true;
+      result = await request(storagePrefix, 'logs', {
+        section: 'user',
+        selections: 'log',
+        params: { ...baseParams, log: requiredLogIds.join(',') },
+        bypassCache
+      });
+      strategyUsed = result.ok ? 'filtered-by-log-ids' : 'failed-filtered';
+    }
 
-    if (!filteredResult.ok && Number(filteredResult.code) === 28) {
+    if (!result || !result.ok || getRawLogCount(result.data) === 0) {
+      unfilteredAttempted = true;
       result = await request(storagePrefix, 'logs', {
         section: 'user',
         selections: 'log',
         params: baseParams,
         bypassCache: true
       });
-      attemptedFiltering = false;
+      strategyUsed = filteredAttempted ? 'fallback-unfiltered' : 'unfiltered';
     }
 
     if (!result.ok) {
-      const debug = buildLogDebug(result, [], attemptedFiltering, requiredLogIds);
+      if (Number(result.code) === 16) {
+        strategyUsed = 'failed-permission';
+      } else if (Number(result.code) === 28) {
+        strategyUsed = 'failed-invalid-log-id';
+      } else {
+        strategyUsed = 'failed-other';
+      }
+
+      const debug = buildLogDebug({
+        result,
+        payload: {},
+        logs: [],
+        attemptedFiltering,
+        unfilteredAttempted,
+        filteredAttempted,
+        requiredLogIds,
+        strategyUsed,
+        rangeUsed
+      });
       updateSettings(storagePrefix, { logImportDebug: debug });
-      return { ...result, debug, requiredLogTypeIds: requiredLogIds, strategyUsed: debug.strategyUsed };
+      return { ...result, debug, requiredLogTypeIds: requiredLogIds, strategyUsed };
     }
 
     const logs = normalizeLogs(result.data);
-    const debug = buildLogDebug(result, logs, attemptedFiltering, requiredLogIds);
+    const debug = buildLogDebug({
+      result,
+      payload: result.data,
+      logs,
+      attemptedFiltering,
+      unfilteredAttempted,
+      filteredAttempted,
+      requiredLogIds,
+      strategyUsed,
+      rangeUsed
+    });
     updateSettings(storagePrefix, { logImportDebug: debug });
 
-    return { ...result, data: logs, debug, requiredLogTypeIds: requiredLogIds, strategyUsed: debug.strategyUsed };
+    return { ...result, data: logs, rawData: result.data, debug, requiredLogTypeIds: requiredLogIds, strategyUsed };
+  }
+
+  async function testRawUserLogs(storagePrefix) {
+    const result = await request(storagePrefix, 'logs', {
+      section: 'user',
+      selections: 'log',
+      params: { _: Date.now() },
+      bypassCache: true
+    });
+    const payload = result.ok ? result.data : {};
+    const logs = result.ok ? normalizeLogs(payload) : [];
+    const debug = buildLogDebug({
+      result,
+      payload,
+      logs,
+      attemptedFiltering: false,
+      unfilteredAttempted: true,
+      filteredAttempted: false,
+      requiredLogIds: getRequiredLogTypeIds(),
+      strategyUsed: result.ok ? 'raw-unfiltered-test' : Number(result.code) === 16 ? 'failed-permission' : 'failed-other',
+      rangeUsed: 'raw-unfiltered-no-date'
+    });
+
+    updateSettings(storagePrefix, { logImportDebug: debug });
+    return { ...result, data: logs, rawData: payload, debug };
   }
 
   async function fetchKeyInfo(storagePrefix, { bypassCache = true } = {}) {
-    const result = await request(storagePrefix, 'keyInfo', {
-      section: 'key',
-      selections: 'info',
-      bypassCache
-    });
+    const result = await request(storagePrefix, 'keyInfo', { section: 'key', selections: 'info', bypassCache });
 
     if (!result.ok) {
       const diagnostics = {
@@ -565,13 +672,7 @@ const FlipTrackerProTornApiService = (() => {
         apiLastError: 'Enter an API key before enabling Torn API.',
         apiLastErrorCode: ''
       });
-      return {
-        ok: false,
-        enabled: false,
-        hasKey: false,
-        maskedKey: '',
-        message: 'Enter an API key before enabling Torn API.'
-      };
+      return { ok: false, enabled: false, hasKey: false, maskedKey: '', message: 'Enter an API key before enabling Torn API.' };
     }
 
     updateSettings(storagePrefix, {
@@ -583,13 +684,7 @@ const FlipTrackerProTornApiService = (() => {
       apiDiagnostics: {}
     });
 
-    return {
-      ok: true,
-      enabled: true,
-      hasKey: true,
-      maskedKey: maskKey(key),
-      message: 'API key saved locally.'
-    };
+    return { ok: true, enabled: true, hasKey: true, maskedKey: maskKey(key), message: 'API key saved locally.' };
   }
 
   function clearApiKey(storagePrefix) {
@@ -603,13 +698,7 @@ const FlipTrackerProTornApiService = (() => {
     });
     cache.clear();
 
-    return {
-      ok: true,
-      enabled: false,
-      hasKey: false,
-      maskedKey: '',
-      message: 'API key cleared.'
-    };
+    return { ok: true, enabled: false, hasKey: false, maskedKey: '', message: 'API key cleared.' };
   }
 
   function setEnabled(storagePrefix, enabled) {
@@ -623,12 +712,7 @@ const FlipTrackerProTornApiService = (() => {
         apiLastError: 'Save an API key before enabling Torn API.',
         apiLastErrorCode: ''
       });
-      return {
-        ok: false,
-        enabled: false,
-        hasKey: false,
-        message: 'Save an API key before enabling Torn API.'
-      };
+      return { ok: false, enabled: false, hasKey: false, message: 'Save an API key before enabling Torn API.' };
     }
 
     updateSettings(storagePrefix, {
@@ -638,12 +722,7 @@ const FlipTrackerProTornApiService = (() => {
       apiLastErrorCode: ''
     });
 
-    return {
-      ok: true,
-      enabled: Boolean(enabled),
-      hasKey,
-      message: enabled ? 'Torn API enabled.' : 'Torn API disabled.'
-    };
+    return { ok: true, enabled: Boolean(enabled), hasKey, message: enabled ? 'Torn API enabled.' : 'Torn API disabled.' };
   }
 
   return {
@@ -655,9 +734,11 @@ const FlipTrackerProTornApiService = (() => {
     getRequiredLogTypeIds,
     getStatus,
     maskKey,
+    normalizeLogs,
     request,
     saveApiKey,
-    setEnabled
+    setEnabled,
+    testRawUserLogs
   };
 })();
 
