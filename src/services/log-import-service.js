@@ -1,4 +1,11 @@
 const FlipTrackerProLogImportService = (() => {
+  const parserSamples = Object.freeze([
+    'You bought a Credit Card on the item market from Max_Lexie at $400 each for a total of $400',
+    'You bought an eCPU on the item market from TheAngryYeti at $350 each for a total of $350',
+    'You bought a Box of Tissues on the item market from Shayari at $300 each for a total of $300',
+    'You bought 2x CPU on the item market from K9E_Indigo at $312 each for a total of $624'
+  ]);
+
   function getStorageService() {
     return window.FlipTrackerProStorageService;
   }
@@ -11,9 +18,22 @@ const FlipTrackerProLogImportService = (() => {
     return window.FlipTrackerProTradeAccountingService;
   }
 
+  function getRequiredLogTypeIds(result) {
+    if (result && Array.isArray(result.requiredLogTypeIds)) {
+      return result.requiredLogTypeIds;
+    }
+
+    const config = window.FlipTrackerProConfig || {};
+    return Array.isArray(config.requiredLogTypeIds) ? config.requiredLogTypeIds : [1225, 1220, 4201, 1112, 4200, 5927, 5510];
+  }
+
   function toNumber(value, fallback = 0) {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : fallback;
+  }
+
+  function parseMoneyValue(value) {
+    return toNumber(String(value || '').replace(/,/g, ''));
   }
 
   function toTimestamp(value) {
@@ -63,49 +83,68 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function parseQuantity(text) {
-    const explicitQuantity = String(text).match(/\b(?:x|qty\s*)?(\d{1,6})\s+(?:x\s+)?([a-z0-9][a-z0-9 '\-()]+?)(?:\s+(?:on|for|at|from|to|via|in)\b|$)/i);
+    const explicitQuantity = String(text).match(/\b(\d{1,6})\s*x\s+/i) || String(text).match(/\b(?:qty\s*)?(\d{1,6})\s+([a-z0-9][a-z0-9 '\-()]+?)(?:\s+(?:on|for|at|from|to|via|in)\b|$)/i);
     return explicitQuantity ? Math.max(1, toNumber(explicitQuantity[1], 1)) : 1;
   }
 
   function parseMoney(text) {
     const matches = [...String(text).matchAll(/\$?([0-9][0-9,]*)(?:\s*dollars)?/gi)]
-      .map((match) => toNumber(String(match[1]).replace(/,/g, '')))
+      .map((match) => parseMoneyValue(match[1]))
       .filter((value) => value > 0);
 
     return matches.length ? matches[matches.length - 1] : 0;
   }
 
+  function calculateQuantity(quantityText, unitPrice, totalPrice) {
+    const explicitQuantity = toNumber(quantityText, 0);
+
+    if (explicitQuantity > 0) {
+      return Math.max(1, Math.round(explicitQuantity));
+    }
+
+    if (unitPrice > 0 && totalPrice > 0) {
+      return Math.max(1, Math.round(totalPrice / unitPrice));
+    }
+
+    return 1;
+  }
+
   function parseItemMarketPurchase(text) {
-    const itemMarket = String(text).match(/you bought\s+(?:(\d{1,6})\s+)?(?:an?\s+)?(.+?)\s+on the item market(?:\s+from\s+([^\s]+))?\s+at\s+\$?([0-9][0-9,]*)\s+each\s+for\s+a\s+total\s+of\s+\$?([0-9][0-9,]*)/i);
+    const itemMarket = String(text).match(/you bought\s+(?:(\d{1,6})\s*x\s+)?(?:an?\s+)?(.+?)\s+on the item market\s+from\s+(.+?)\s+at\s+\$?([0-9][0-9,]*)\s+each\s+for\s+a\s+total\s+of\s+\$?([0-9][0-9,]*)/i);
 
     if (!itemMarket) {
       return null;
     }
 
+    const unitBuyPrice = parseMoneyValue(itemMarket[4]);
+    const totalBuyPrice = parseMoneyValue(itemMarket[5]);
+
     return {
       itemName: itemMarket[2].trim(),
-      quantity: Math.max(1, toNumber(itemMarket[1], 1)),
-      sellerName: itemMarket[3] || '',
-      unitBuyPrice: toNumber(String(itemMarket[4]).replace(/,/g, '')),
-      totalBuyPrice: toNumber(String(itemMarket[5]).replace(/,/g, ''))
+      quantity: calculateQuantity(itemMarket[1], unitBuyPrice, totalBuyPrice),
+      sellerName: itemMarket[3].trim(),
+      unitBuyPrice,
+      totalBuyPrice
     };
   }
 
   function parseItemMarketSale(text) {
-    const itemMarket = String(text).match(/(?:you sold|sold)\s+(?:(\d{1,6})\s+)?(?:an?\s+)?(.+?)\s+(?:on|via)\s+(?:the\s+)?(?:item market|bazaar).*?(?:at|for)\s+\$?([0-9][0-9,]*)/i);
+    const itemMarket = String(text).match(/(?:you sold|sold|buyer bought|was bought from your bazaar)\s+(?:(\d{1,6})\s*x\s+)?(?:an?\s+)?(.+?)\s+(?:on|via|from)\s+(?:the\s+)?(?:item market|bazaar).*?(?:at|for)\s+\$?([0-9][0-9,]*)(?:\s+each)?.*?(?:total\s+of\s+\$?([0-9][0-9,]*))?/i);
 
     if (!itemMarket) {
       return null;
     }
 
-    const quantity = Math.max(1, toNumber(itemMarket[1], 1));
-    const totalSellPrice = toNumber(String(itemMarket[3]).replace(/,/g, ''));
+    const quantityText = itemMarket[1];
+    const firstMoney = parseMoneyValue(itemMarket[3]);
+    const totalMoney = itemMarket[4] ? parseMoneyValue(itemMarket[4]) : firstMoney;
+    const quantity = calculateQuantity(quantityText, firstMoney, totalMoney);
 
     return {
       itemName: itemMarket[2].trim(),
       quantity,
-      unitSellPrice: quantity > 0 ? totalSellPrice / quantity : totalSellPrice,
-      totalSellPrice
+      unitSellPrice: quantity > 0 && itemMarket[4] ? firstMoney : totalMoney / quantity,
+      totalSellPrice: totalMoney
     };
   }
 
@@ -125,19 +164,25 @@ const FlipTrackerProLogImportService = (() => {
       return { itemName: marketPurchase.itemName };
     }
 
+    const marketSale = parseItemMarketSale(text);
+
+    if (marketSale) {
+      return { itemName: marketSale.itemName };
+    }
+
     const quoted = String(text).match(/["']([^"']{2,80})["']/);
 
     if (quoted) {
       return { itemName: quoted[1] };
     }
 
-    const fallback = String(text).match(/(?:bought|purchased|sold|received|sent)\s+(?:\d+\s+)?(?:an?\s+)?(.+?)(?:\s+(?:on|for|at|from|to|via|in)\b|$)/i);
+    const fallback = String(text).match(/(?:bought|purchased|sold|received|sent)\s+(?:\d+\s*x\s+)?(?:an?\s+)?(.+?)(?:\s+(?:on|for|at|from|to|via|in)\b|$)/i);
     return { itemName: fallback ? fallback[1].trim() : 'Unknown item' };
   }
 
   function classifyLog(log) {
     const text = getLogText(log).toLowerCase();
-    const category = String(log.category || log.cat || log.type || '').toLowerCase();
+    const category = String(log.category || log.cat || log.type || log.logId || '').toLowerCase();
 
     if (parseItemMarketPurchase(text)) {
       return 'buy';
@@ -221,6 +266,8 @@ const FlipTrackerProLogImportService = (() => {
       salesImported: 0,
       duplicatesSkipped: 0,
       unmatchedSales: 0,
+      rawLogsReturned: 0,
+      normalizedLogs: 0,
       logsReturned: 0,
       classifiedPurchases: 0,
       classifiedSales: 0,
@@ -232,17 +279,25 @@ const FlipTrackerProLogImportService = (() => {
 
   function buildImportDebug(result, summary) {
     const request = result && result.request ? result.request : {};
+    const serviceDebug = result && result.debug ? result.debug : {};
 
     return {
-      lastEndpoint: request.endpoint || '',
-      lastSelections: request.selections || '',
-      lastParams: request.params || {},
-      lastErrorCode: result && result.code ? result.code : '',
-      lastError: result && result.error ? result.error : '',
-      logsReturned: summary.logsReturned || 0,
+      requiredLogTypeIds: getRequiredLogTypeIds(result),
+      logIdFilteringAttempted: Boolean(serviceDebug.logIdFilteringAttempted),
+      strategyUsed: serviceDebug.strategyUsed || result.strategyUsed || 'failed-other',
+      lastEndpoint: request.endpoint || serviceDebug.lastEndpoint || '',
+      lastSelections: request.selections || serviceDebug.lastSelections || '',
+      lastParams: request.params || serviceDebug.lastParams || {},
+      lastErrorCode: result && result.code ? result.code : serviceDebug.lastErrorCode || '',
+      lastError: result && result.error ? result.error : serviceDebug.lastError || '',
+      rawLogsReturned: summary.rawLogsReturned || serviceDebug.rawLogsReturned || 0,
+      normalizedLogs: summary.normalizedLogs || serviceDebug.normalizedLogs || 0,
+      logsReturned: summary.logsReturned || serviceDebug.logsReturned || 0,
       classifiedPurchases: summary.classifiedPurchases || 0,
       classifiedSales: summary.classifiedSales || 0,
       duplicatesSkipped: summary.duplicatesSkipped || 0,
+      purchasesImported: summary.purchasesImported || 0,
+      salesImported: summary.salesImported || 0,
       unmatchedSales: summary.unmatchedSales || 0,
       updatedAt: new Date().toISOString()
     };
@@ -280,6 +335,8 @@ const FlipTrackerProLogImportService = (() => {
 
     const logs = Array.isArray(result.data) ? result.data : [];
     const now = new Date().toISOString();
+    summary.rawLogsReturned = result.debug && result.debug.rawLogsReturned ? result.debug.rawLogsReturned : logs.length;
+    summary.normalizedLogs = logs.length;
     summary.logsReturned = logs.length;
 
     storageService.update(storagePrefix, (data) => {
@@ -376,8 +433,16 @@ const FlipTrackerProLogImportService = (() => {
     return summary;
   }
 
+  function runParserSelfTest() {
+    return parserSamples.map((sample) => ({
+      sample,
+      parsed: parseItemMarketPurchase(sample)
+    }));
+  }
+
   return {
-    importLogs
+    importLogs,
+    runParserSelfTest
   };
 })();
 
