@@ -10,23 +10,65 @@ const FlipTrackerProPortfolioService = (() => {
     };
   }
 
-  function calculate(lots = [], settings = {}) {
+  function getLotUnitBuyPrice(lot) {
+    return Number(lot.unitBuyPrice ?? lot.unitCost ?? lot.buyPrice) || 0;
+  }
+
+  function getRemainingQuantity(lot) {
+    const quantity = Number(lot.quantity) || 0;
+    const remainingQuantity = lot.remainingQuantity === undefined ? quantity : Number(lot.remainingQuantity);
+    return Math.max(0, Number.isFinite(remainingQuantity) ? remainingQuantity : quantity);
+  }
+
+  function getSnapshotKey(snapshot) {
+    return snapshot.itemId ? `id:${snapshot.itemId}` : `name:${String(snapshot.itemName || '').toLowerCase()}`;
+  }
+
+  function createSnapshotMap(priceSnapshots = []) {
+    return priceSnapshots.reduce((snapshots, snapshot) => {
+      const key = getSnapshotKey(snapshot);
+      const current = snapshots[key];
+      const currentTime = current ? Date.parse(current.timestamp || '') : 0;
+      const nextTime = Date.parse(snapshot.timestamp || '') || 0;
+
+      if (!current || nextTime >= currentTime) {
+        snapshots[key] = snapshot;
+      }
+
+      return snapshots;
+    }, {});
+  }
+
+  function findSnapshot(item, snapshotMap) {
+    return snapshotMap[`id:${item.itemId}`] || snapshotMap[`name:${String(item.itemName || '').toLowerCase()}`] || null;
+  }
+
+  function calculate(lots = [], settings = {}, priceSnapshots = []) {
     const resolvedSettings = getSettings(settings);
+    const snapshotMap = createSnapshotMap(priceSnapshots);
     const groupedItems = lots.reduce((items, lot) => {
       const itemName = lot.itemName || 'Unnamed item';
-      const quantity = Number(lot.quantity) || 0;
-      const totalCost = Number(lot.totalCost) || ((Number(lot.unitCost) || 0) * quantity);
+      const itemId = lot.itemId || '';
+      const quantity = getRemainingQuantity(lot);
+      const unitBuyPrice = getLotUnitBuyPrice(lot);
+      const openInvestment = unitBuyPrice * quantity;
+      const key = itemId ? `id:${itemId}` : `name:${String(itemName).toLowerCase()}`;
 
-      if (!items[itemName]) {
-        items[itemName] = {
+      if (quantity <= 0) {
+        return items;
+      }
+
+      if (!items[key]) {
+        items[key] = {
+          itemId,
           itemName,
           quantity: 0,
           totalInvestment: 0
         };
       }
 
-      items[itemName].quantity += quantity;
-      items[itemName].totalInvestment += totalCost;
+      items[key].quantity += quantity;
+      items[key].totalInvestment += openInvestment;
       return items;
     }, {});
 
@@ -39,8 +81,14 @@ const FlipTrackerProPortfolioService = (() => {
         const netTargetRevenue = targetSellPrice * item.quantity * feeMultiplier;
         const estimatedProfit = netTargetRevenue - item.totalInvestment;
         const estimatedROI = item.totalInvestment > 0 ? (estimatedProfit / item.totalInvestment) * 100 : 0;
+        const snapshot = findSnapshot(item, snapshotMap);
+        const currentSellPrice = snapshot ? Number(snapshot.bazaarPrice ?? snapshot.marketPrice) || 0 : 0;
+        const currentNetRevenue = currentSellPrice * item.quantity * feeMultiplier;
+        const currentEstimatedProfit = snapshot ? currentNetRevenue - item.totalInvestment : 0;
+        const currentEstimatedROI = item.totalInvestment > 0 && snapshot ? (currentEstimatedProfit / item.totalInvestment) * 100 : 0;
 
         return {
+          itemId: item.itemId,
           itemName: item.itemName,
           quantity: item.quantity,
           totalInvestment: roundMoney(item.totalInvestment),
@@ -48,7 +96,11 @@ const FlipTrackerProPortfolioService = (() => {
           breakEvenSellPrice: roundMoney(breakEvenSellPrice),
           targetSellPrice: roundMoney(targetSellPrice),
           estimatedProfit: roundMoney(estimatedProfit),
-          estimatedROI: roundMoney(estimatedROI)
+          estimatedROI: roundMoney(estimatedROI),
+          currentSellPrice: roundMoney(currentSellPrice),
+          currentEstimatedProfit: roundMoney(currentEstimatedProfit),
+          currentEstimatedROI: roundMoney(currentEstimatedROI),
+          priceUpdatedAt: snapshot ? snapshot.timestamp : ''
         };
       })
       .sort((left, right) => right.totalInvestment - left.totalInvestment);
@@ -59,8 +111,10 @@ const FlipTrackerProPortfolioService = (() => {
       itemCount: summary.itemCount + 1,
       openQuantity: summary.openQuantity + item.quantity,
       totalInvestment: summary.totalInvestment + item.totalInvestment,
-      estimatedProfit: summary.estimatedProfit + item.estimatedProfit
+      estimatedProfit: summary.estimatedProfit + item.estimatedProfit,
+      currentEstimatedProfit: summary.currentEstimatedProfit + item.currentEstimatedProfit
     }), {
+      currentEstimatedProfit: 0,
       estimatedProfit: 0,
       itemCount: 0,
       openQuantity: 0,
