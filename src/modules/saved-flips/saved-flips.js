@@ -21,8 +21,25 @@ const FlipTrackerProSavedFlips = (() => {
     }).format(value || 0);
   }
 
+  function getSaleProfit(sale) {
+    return Number(sale.netProfit ?? sale.profit) || 0;
+  }
+
+  function getSaleRoi(sale) {
+    return Number(sale.roi ?? sale.margin) || 0;
+  }
+
+  function getUnitSellPrice(sale) {
+    return Number(sale.unitSellPrice ?? sale.sellPrice) || 0;
+  }
+
+  function getUnitBuyPrice(sale) {
+    const quantity = Number(sale.quantity) || 1;
+    return Number(sale.buyPrice) || ((Number(sale.matchedBuyCost ?? sale.totalBuy) || 0) / quantity);
+  }
+
   function getCreatedTime(sale) {
-    const timestamp = Date.parse(sale.createdAt || sale.updatedAt || '');
+    const timestamp = Date.parse(sale.soldAt || sale.createdAt || sale.updatedAt || '');
     return Number.isNaN(timestamp) ? 0 : timestamp;
   }
 
@@ -33,7 +50,7 @@ const FlipTrackerProSavedFlips = (() => {
       .filter((sale) => {
         const itemName = String(sale.itemName || '').toLowerCase();
         const notes = String(sale.notes || '').toLowerCase();
-        const profit = Number(sale.profit) || 0;
+        const profit = getSaleProfit(sale);
         const matchesQuery = !query || itemName.includes(query) || notes.includes(query);
         const matchesProfit = activeFilters.profit === 'all'
           || (activeFilters.profit === 'profit' && profit >= 0)
@@ -43,11 +60,11 @@ const FlipTrackerProSavedFlips = (() => {
       })
       .sort((left, right) => {
         if (activeFilters.sort === 'highest') {
-          return (Number(right.profit) || 0) - (Number(left.profit) || 0);
+          return getSaleProfit(right) - getSaleProfit(left);
         }
 
         if (activeFilters.sort === 'lowest') {
-          return (Number(left.profit) || 0) - (Number(right.profit) || 0);
+          return getSaleProfit(left) - getSaleProfit(right);
         }
 
         return getCreatedTime(right) - getCreatedTime(left);
@@ -84,7 +101,8 @@ const FlipTrackerProSavedFlips = (() => {
   }
 
   function renderSale(sale) {
-    const profitState = sale.profit >= 0 ? 'positive' : 'negative';
+    const profit = getSaleProfit(sale);
+    const profitState = profit >= 0 ? 'positive' : 'negative';
     const saleId = escapeHtml(sale.id);
     const itemName = escapeHtml(sale.itemName || 'Unnamed item');
     const notes = escapeHtml(sale.notes || '');
@@ -93,13 +111,13 @@ const FlipTrackerProSavedFlips = (() => {
       <li class="ftp-saved-flip" data-flip-id="${saleId}">
         <div class="ftp-saved-flip-main">
           <strong>${itemName}</strong>
-          <span>Buy ${formatMoney(sale.buyPrice)} / Sell ${formatMoney(sale.sellPrice)} / Qty ${sale.quantity || 1}</span>
-          <span>Fees ${formatMoney(sale.fees)} / Margin ${(Number(sale.margin) || 0).toFixed(1)}%</span>
+          <span>Buy ${formatMoney(getUnitBuyPrice(sale))} / Sell ${formatMoney(getUnitSellPrice(sale))} / Qty ${sale.quantity || 1}</span>
+          <span>Fees ${formatMoney(sale.fees)} / ROI ${getSaleRoi(sale).toFixed(1)}%</span>
           ${notes ? `<span>Note: ${notes}</span>` : ''}
         </div>
 
         <div class="ftp-saved-flip-side">
-          <strong data-profit-state="${profitState}">${formatMoney(sale.profit)}</strong>
+          <strong data-profit-state="${profitState}">${formatMoney(profit)}</strong>
           <div class="ftp-row-actions">
             <button class="ftp-secondary-button" type="button" data-edit-flip="${saleId}">Edit</button>
             <button class="ftp-danger-button" type="button" data-delete-flip="${saleId}">Delete</button>
