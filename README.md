@@ -2,11 +2,11 @@
 
 A professional standalone Tampermonkey application for Torn flip tracking.
 
-Current version: `0.8.2`
+Current version: `0.8.3`
 
 ## What It Does
 
-Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, and Torn log import diagnostics.
+Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, Torn log import diagnostics, and an import review queue for recognized logs that need manual review.
 
 The installable release is a single readable userscript with no runtime dependency on GitHub, CDNs, external CSS, frameworks, jQuery, or module imports.
 
@@ -78,7 +78,7 @@ Sell log IDs:
 1226, 1221, 1113, 1104, 4210, 5928, 5511
 ```
 
-Version 0.8.2 classifies logs by Torn log type ID first, then falls back to text parsing for known buy/sell wording.
+Version 0.8.3 classifies logs by Torn log type ID first, then falls back to text parsing for known buy/sell wording. Recognized buy/sell logs are never silently dropped: each one becomes an import, a duplicate skip, or a Needs review item.
 
 ## Log Import Diagnostics
 
@@ -86,10 +86,11 @@ Settings includes:
 
 - Import latest logs, which checks the last 24 hours first and then the last 7 days if no logs are returned.
 - Import date range, with same-day ranges treated as the full day.
-- Test raw log API, which calls unfiltered `user -> log` with no date or log ID filters.
+- Raw Log Test, which calls unfiltered `user -> log` with no date or log ID filters.
 - Copy debug report, which excludes the API key.
+- Needs review diagnostics for recognized logs that could not be parsed.
 
-The debug report now includes raw and normalized counts, buy/sell ID matches, text matches, imported counts, duplicate skips, unmatched sales, first sanitized log samples, and timing details.
+The debug report includes raw and normalized counts, buy/sell ID matches, text matches, candidate counts, saved counts, duplicate skips, unmatched sales, review candidates, parser failures, validation failures, first sanitized log samples, and timing details.
 
 ## Release Notes
 
