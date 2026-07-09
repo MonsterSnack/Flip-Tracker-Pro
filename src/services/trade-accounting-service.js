@@ -35,14 +35,28 @@ const FlipTrackerProTradeAccountingService = (() => {
       .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')));
   }
 
+  function getManualBuyCost(sale, unmatchedQuantity) {
+    if (!sale.manualBuyCostOverride) {
+      return 0;
+    }
+
+    const explicitTotal = toNumber(sale.manualBuyCost, toNumber(sale.matchedBuyCost, toNumber(sale.totalBuy)));
+
+    if (explicitTotal > 0) {
+      return explicitTotal;
+    }
+
+    return toNumber(sale.buyPrice) * unmatchedQuantity;
+  }
+
   function matchSale({ purchaseLots = [], sale = {}, settings = {} } = {}) {
-    const quantity = Math.max(1, toNumber(sale.quantity, 1));
+    const quantity = Math.max(1, Math.floor(toNumber(sale.quantity, 1)));
     const unitSellPrice = toNumber(sale.unitSellPrice, toNumber(sale.sellPrice));
     const totalSellPrice = roundMoney(toNumber(sale.totalSellPrice, unitSellPrice * quantity));
     const feeRate = getBazaarFeeRate(settings);
-    const explicitBuyCost = toNumber(sale.matchedBuyCost, toNumber(sale.totalBuy));
     let remainingToMatch = quantity;
     let matchedBuyCost = 0;
+    let matchedQuantity = 0;
     const matchedLots = [];
 
     getOpenLotsForItem(purchaseLots, sale).forEach((lot) => {
@@ -51,29 +65,29 @@ const FlipTrackerProTradeAccountingService = (() => {
       }
 
       const availableQuantity = getRemainingQuantity(lot);
-      const matchedQuantity = Math.min(availableQuantity, remainingToMatch);
+      const lotMatchedQuantity = Math.min(availableQuantity, remainingToMatch);
       const unitBuyPrice = getUnitBuyPrice(lot);
-      const lotCost = roundMoney(unitBuyPrice * matchedQuantity);
+      const lotCost = roundMoney(unitBuyPrice * lotMatchedQuantity);
 
       matchedBuyCost += lotCost;
-      remainingToMatch -= matchedQuantity;
+      matchedQuantity += lotMatchedQuantity;
+      remainingToMatch -= lotMatchedQuantity;
       matchedLots.push({
         lotId: lot.id,
-        quantity: matchedQuantity,
+        quantity: lotMatchedQuantity,
         unitBuyPrice,
         totalBuyPrice: lotCost
       });
     });
 
-    if (remainingToMatch > 0 && explicitBuyCost > 0) {
-      matchedBuyCost += explicitBuyCost;
-      remainingToMatch = 0;
-    }
-
-    const bazaarFee = roundMoney(totalSellPrice * feeRate);
-    const grossProfit = roundMoney(totalSellPrice - matchedBuyCost);
-    const netProfit = roundMoney(grossProfit - bazaarFee);
-    const roi = matchedBuyCost > 0 ? (netProfit / matchedBuyCost) * 100 : 0;
+    const unmatchedQuantity = Math.max(0, remainingToMatch);
+    const manualBuyCost = roundMoney(getManualBuyCost(sale, unmatchedQuantity));
+    const totalMatchedBuyCost = roundMoney(matchedBuyCost + manualBuyCost);
+    const calculatedBazaarFee = roundMoney(totalSellPrice * feeRate);
+    const fees = sale.fees === undefined || sale.fees === '' ? calculatedBazaarFee : roundMoney(toNumber(sale.fees));
+    const grossProfit = roundMoney(totalSellPrice - totalMatchedBuyCost);
+    const netProfit = roundMoney(grossProfit - fees);
+    const roi = totalMatchedBuyCost > 0 ? (netProfit / totalMatchedBuyCost) * 100 : 0;
 
     return {
       id: sale.id || createSaleId(),
@@ -82,8 +96,14 @@ const FlipTrackerProTradeAccountingService = (() => {
       quantity,
       unitSellPrice,
       totalSellPrice,
-      matchedBuyCost: roundMoney(matchedBuyCost),
+      matchedQuantity,
+      unmatchedQuantity,
+      matchedBuyCost: totalMatchedBuyCost,
+      fifoBuyCost: roundMoney(matchedBuyCost),
+      manualBuyCost,
+      manualBuyCostOverride: Boolean(sale.manualBuyCostOverride),
       grossProfit,
+      fees,
       netProfit,
       roi,
       soldAt: sale.soldAt || sale.updatedAt || sale.createdAt || new Date().toISOString(),
