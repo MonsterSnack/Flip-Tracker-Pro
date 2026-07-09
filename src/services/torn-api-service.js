@@ -32,7 +32,7 @@ const FlipTrackerProTornApiService = (() => {
     const storageService = getStorageService();
 
     if (storageService && typeof storageService.update === 'function') {
-      storageService.update(storagePrefix, (data) => ({
+      return storageService.update(storagePrefix, (data) => ({
         ...data,
         settings: {
           ...data.settings,
@@ -40,6 +40,8 @@ const FlipTrackerProTornApiService = (() => {
         }
       }));
     }
+
+    return { settings: getSettings(storagePrefix) };
   }
 
   function notify(type, title, message) {
@@ -60,20 +62,16 @@ const FlipTrackerProTornApiService = (() => {
 
   function getStatus(storagePrefix) {
     const settings = getSettings(storagePrefix);
-
-    if (!settings.apiEnabled) {
-      return { enabled: false, label: 'Disabled', status: 'disabled' };
-    }
-
-    if (!settings.apiKey) {
-      return { enabled: false, label: 'Missing API key', status: 'missing-key' };
-    }
+    const hasKey = Boolean(settings.apiKey);
+    const enabled = Boolean(settings.apiEnabled && hasKey);
 
     return {
-      enabled: true,
-      label: settings.apiStatus === 'invalid' ? 'Invalid key' : 'Ready',
-      maskedKey: maskKey(settings.apiKey),
-      status: settings.apiStatus || 'ready'
+      enabled,
+      hasKey,
+      label: enabled ? 'Ready' : hasKey ? 'Saved, disabled' : 'No API key saved',
+      lastError: settings.apiLastError || '',
+      maskedKey: hasKey ? maskKey(settings.apiKey) : '',
+      status: settings.apiStatus || (enabled ? 'ready' : 'disabled')
     };
   }
 
@@ -242,12 +240,38 @@ const FlipTrackerProTornApiService = (() => {
   }
 
   function saveApiKey(storagePrefix, apiKey) {
+    const key = String(apiKey || '').trim();
+
+    if (!key) {
+      updateSettings(storagePrefix, {
+        apiEnabled: false,
+        apiKey: '',
+        apiStatus: 'missing-key',
+        apiLastError: 'Enter an API key before enabling Torn API.'
+      });
+      return {
+        ok: false,
+        enabled: false,
+        hasKey: false,
+        maskedKey: '',
+        message: 'Enter an API key before enabling Torn API.'
+      };
+    }
+
     updateSettings(storagePrefix, {
       apiEnabled: true,
-      apiKey: String(apiKey || '').trim(),
-      apiStatus: String(apiKey || '').trim() ? 'saved' : 'missing-key',
+      apiKey: key,
+      apiStatus: 'saved',
       apiLastError: ''
     });
+
+    return {
+      ok: true,
+      enabled: true,
+      hasKey: true,
+      maskedKey: maskKey(key),
+      message: 'API key saved locally.'
+    };
   }
 
   function clearApiKey(storagePrefix) {
@@ -258,13 +282,46 @@ const FlipTrackerProTornApiService = (() => {
       apiLastError: ''
     });
     cache.clear();
+
+    return {
+      ok: true,
+      enabled: false,
+      hasKey: false,
+      maskedKey: '',
+      message: 'API key cleared.'
+    };
   }
 
   function setEnabled(storagePrefix, enabled) {
+    const settings = getSettings(storagePrefix);
+    const hasKey = Boolean(settings.apiKey);
+
+    if (enabled && !hasKey) {
+      updateSettings(storagePrefix, {
+        apiEnabled: false,
+        apiStatus: 'missing-key',
+        apiLastError: 'Save an API key before enabling Torn API.'
+      });
+      return {
+        ok: false,
+        enabled: false,
+        hasKey: false,
+        message: 'Save an API key before enabling Torn API.'
+      };
+    }
+
     updateSettings(storagePrefix, {
       apiEnabled: Boolean(enabled),
-      apiStatus: enabled ? 'saved' : 'disabled'
+      apiStatus: enabled ? 'ready' : 'disabled',
+      apiLastError: ''
     });
+
+    return {
+      ok: true,
+      enabled: Boolean(enabled),
+      hasKey,
+      message: enabled ? 'Torn API enabled.' : 'Torn API disabled.'
+    };
   }
 
   return {
