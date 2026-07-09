@@ -22,20 +22,28 @@ const FlipTrackerProFlipEntry = (() => {
     const buyPrice = parseMoney(form.buyPrice.value);
     const sellPrice = parseMoney(form.sellPrice.value);
     const fees = parseMoney(form.fees.value);
-    const totalBuy = buyPrice * quantity;
-    const totalSell = sellPrice * quantity;
-    const profit = totalSell - totalBuy - fees;
-    const margin = totalBuy > 0 ? (profit / totalBuy) * 100 : 0;
+    const matchedBuyCost = buyPrice * quantity;
+    const totalSellPrice = sellPrice * quantity;
+    const grossProfit = totalSellPrice - matchedBuyCost;
+    const netProfit = grossProfit - fees;
+    const roi = matchedBuyCost > 0 ? (netProfit / matchedBuyCost) * 100 : 0;
 
     return {
       buyPrice,
       fees,
-      margin,
-      profit,
+      grossProfit,
+      matchedBuyCost,
+      margin: roi,
+      netProfit,
+      profit: netProfit,
       quantity,
+      roi,
       sellPrice,
-      totalBuy,
-      totalSell
+      source: 'manual',
+      totalBuy: matchedBuyCost,
+      totalSell: totalSellPrice,
+      totalSellPrice,
+      unitSellPrice: sellPrice
     };
   }
 
@@ -83,7 +91,7 @@ const FlipTrackerProFlipEntry = (() => {
           <div class="ftp-profit-preview" data-profit-preview>
             <span>Estimated profit</span>
             <strong>$0</strong>
-            <small>Margin 0%</small>
+            <small>ROI 0%</small>
           </div>
 
           <div class="ftp-form-actions">
@@ -122,17 +130,17 @@ const FlipTrackerProFlipEntry = (() => {
 
     function updatePreview() {
       const result = calculateProfit(form.elements);
-      previewValue.textContent = formatMoney(result.profit);
-      previewValue.dataset.profitState = result.profit >= 0 ? 'positive' : 'negative';
-      previewMeta.textContent = `Margin ${result.margin.toFixed(1)}%`;
+      previewValue.textContent = formatMoney(result.netProfit);
+      previewValue.dataset.profitState = result.netProfit >= 0 ? 'positive' : 'negative';
+      previewMeta.textContent = `ROI ${result.roi.toFixed(1)}%`;
       return result;
     }
 
     form.loadFlip = (flip) => {
       form.elements.flipId.value = flip.id;
       form.elements.itemName.value = flip.itemName || '';
-      form.elements.buyPrice.value = flip.buyPrice || 0;
-      form.elements.sellPrice.value = flip.sellPrice || 0;
+      form.elements.buyPrice.value = flip.buyPrice || (flip.quantity ? (Number(flip.matchedBuyCost) || 0) / flip.quantity : 0);
+      form.elements.sellPrice.value = flip.sellPrice || flip.unitSellPrice || 0;
       form.elements.quantity.value = flip.quantity || 1;
       form.elements.fees.value = flip.fees || 0;
       form.elements.notes.value = flip.notes || '';
@@ -156,7 +164,8 @@ const FlipTrackerProFlipEntry = (() => {
       const flip = {
         ...result,
         itemName: form.elements.itemName.value.trim(),
-        notes: form.elements.notes.value.trim()
+        notes: form.elements.notes.value.trim(),
+        soldAt: new Date().toISOString()
       };
       const flipId = form.elements.flipId.value;
 
