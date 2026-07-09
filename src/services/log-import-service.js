@@ -1,6 +1,8 @@
 const FlipTrackerProLogImportService = (() => {
   const batchSize = 75;
   const parserSamples = Object.freeze([
+    'Item market buy | 4378669 | 0 | 1301 | 5 | 1450 | 290 | 1 | green',
+    'Item market sell | 4378670 | 0 | 1301 | 5 | 1750 | 350 | 1 | green',
     '12:20:00 - 09/07/26 You bought 5x CPU on the item market from t_bombadil at $290 each for a total of $1,450',
     'You bought 5x CPU on the item market from t_bombadil at $290 each for a total of $1,450',
     'You bought a Credit Card on the item market from Max_Lexie at $400 each for a total of $400',
@@ -157,12 +159,117 @@ const FlipTrackerProLogImportService = (() => {
     return { ...candidate, quantity, [unitField]: unit, [totalField]: total };
   }
 
+  function addItemName(itemMap, itemId, itemName) {
+    const id = itemId === undefined || itemId === null || itemId === '' ? '' : String(itemId);
+    const name = String(itemName || '').trim();
+    if (id && name && !/^Item #\d+$/i.test(name)) itemMap.set(id, name);
+  }
+
+  function scanItems(value, itemMap, depth = 0) {
+    if (!value || depth > 4) return;
+    if (Array.isArray(value)) {
+      value.slice(0, 5000).forEach((entry) => scanItems(entry, itemMap, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    Object.entries(value).slice(0, 5000).forEach(([key, entry]) => {
+      if (entry && typeof entry === 'object') {
+        addItemName(itemMap, entry.itemId || entry.item_id || entry.id || (/^\d+$/.test(key) ? key : ''), entry.itemName || entry.item_name || entry.name || entry.title);
+        scanItems(entry.items || entry.data || entry.children, itemMap, depth + 1);
+        return;
+      }
+      if (/^\d+$/.test(key) && typeof entry === 'string') addItemName(itemMap, key, entry);
+    });
+  }
+
+  function createItemLookup(data = {}) {
+    const itemMap = new Map();
+    (Array.isArray(data.itemPriceSnapshots) ? data.itemPriceSnapshots : []).forEach((snapshot) => addItemName(itemMap, snapshot.itemId, snapshot.itemName));
+    scanItems(data.itemMap, itemMap);
+    scanItems(data.items, itemMap);
+    scanItems(data.tornItems, itemMap);
+    scanItems(data.settings && data.settings.itemMap, itemMap);
+    scanItems(data.settings && data.settings.tornItems, itemMap);
+
+    return {
+      resolve(itemId, fallbackName = '') {
+        const id = itemId === undefined || itemId === null || itemId === '' ? '' : String(itemId);
+        const givenName = String(fallbackName || '').trim();
+        const cachedName = id ? itemMap.get(id) || '' : '';
+        const itemName = givenName || cachedName || (id ? `Item #${id}` : '');
+        return {
+          itemId: id || undefined,
+          itemName,
+          needsNameReview: Boolean(id && !givenName && !cachedName)
+        };
+      }
+    };
+  }
+
+  function splitPipeLog(text) {
+    const parts = String(text || '').split('|').map((part) => part.trim()).filter((part) => part !== '');
+    return parts.length >= 7 ? parts : null;
+  }
+
+  function isPipeBuyText(text) {
+    const parts = splitPipeLog(text);
+    return Boolean(parts && /item\s+market\s+buy/i.test(parts[0]));
+  }
+
+  function isPipeSellText(text) {
+    const parts = splitPipeLog(text);
+    return Boolean(parts && /(item\s+market\s+(sell|sale)|market\s+sell)/i.test(parts[0]));
+  }
+
+  function parsePipeBuy(log, itemLookup) {
+    const parts = splitPipeLog(getLogText(log));
+    if (!parts || !/item\s+market\s+buy/i.test(parts[0])) return null;
+    const itemId = toNumber(parts[3], 0);
+    const quantity = toNumber(parts[4], 0);
+    const totalBuyPrice = toNumber(parts[5], 0);
+    const unitBuyPrice = toNumber(parts[6], 0);
+    if (!itemId && !quantity && !totalBuyPrice && !unitBuyPrice) return null;
+    const resolved = itemLookup.resolve(itemId ? String(itemId) : '');
+    return normalizePriceFields({
+      parserKind: 'pipe',
+      itemId: resolved.itemId,
+      itemName: resolved.itemName,
+      needsNameReview: resolved.needsNameReview,
+      quantity,
+      unitBuyPrice,
+      totalBuyPrice
+    }, 'unitBuyPrice', 'totalBuyPrice');
+  }
+
+  function parsePipeSell(log, itemLookup) {
+    const parts = splitPipeLog(getLogText(log));
+    if (!parts || !/(item\s+market\s+(sell|sale)|market\s+sell)/i.test(parts[0])) return null;
+    const itemId = toNumber(parts[3], 0);
+    const quantity = toNumber(parts[4], 0);
+    const totalSellPrice = toNumber(parts[5], 0);
+    const unitSellPrice = toNumber(parts[6], 0);
+    const possibleFee = toNumber(parts[7], 0);
+    if (!itemId && !quantity && !totalSellPrice && !unitSellPrice) return null;
+    const resolved = itemLookup.resolve(itemId ? String(itemId) : '');
+    return normalizePriceFields({
+      parserKind: 'pipe',
+      itemId: resolved.itemId,
+      itemName: resolved.itemName,
+      needsNameReview: resolved.needsNameReview,
+      quantity,
+      unitSellPrice,
+      totalSellPrice,
+      fees: possibleFee > 1 && possibleFee < totalSellPrice ? possibleFee : undefined
+    }, 'unitSellPrice', 'totalSellPrice');
+  }
+
   function parseItemMarketPurchase(text) {
     const match = String(text).match(/(?:^|\b)(?:\d{1,2}:\d{2}:\d{2}\s+-\s+\d{2}\/\d{2}\/\d{2}\s+)?you bought\s+(?:(\d{1,8})\s*x\s+)?(?:an?\s+)?(.+?)\s+on the item market\s+from\s+(.+?)\s+at\s+\$?([0-9][0-9,]*)\s+each\s+for\s+a\s+total\s+of\s+\$?([0-9][0-9,]*)/i);
     if (!match) return null;
     const unitBuyPrice = parseMoneyValue(match[4]);
     const totalBuyPrice = parseMoneyValue(match[5]);
     return normalizePriceFields({
+      parserKind: 'text',
       itemName: match[2].trim(),
       quantity: calculateQuantity(match[1], unitBuyPrice, totalBuyPrice),
       sellerName: match[3].trim(),
@@ -177,6 +284,7 @@ const FlipTrackerProLogImportService = (() => {
     const unitSellPrice = parseMoneyValue(match[4]);
     const totalSellPrice = parseMoneyValue(match[5]);
     return normalizePriceFields({
+      parserKind: 'text',
       itemName: match[2].trim(),
       quantity: calculateQuantity(match[1], unitSellPrice, totalSellPrice),
       buyerName: match[3] ? match[3].trim() : '',
@@ -186,18 +294,21 @@ const FlipTrackerProLogImportService = (() => {
     }, 'unitSellPrice', 'totalSellPrice');
   }
 
-  function parseStructuredBuy(log) {
+  function parseStructuredBuy(log, itemLookup) {
     const itemValue = findField(log, ['itemName', 'item_name', 'item', 'itemId', 'item_id', 'itemid']);
     const itemName = extractItemName(findField(log, ['itemName', 'item_name', 'item'])) || extractItemName(itemValue);
     const itemId = extractItemId(findField(log, ['itemId', 'item_id', 'itemid'])) || extractItemId(itemValue);
+    const resolved = itemLookup.resolve(itemId, itemName);
     const quantity = toNumber(findField(log, ['quantity', 'qty', 'amount', 'count']), 0);
     const unitBuyPrice = toNumber(findField(log, ['price', 'unitPrice', 'unit_price', 'cost', 'unitCost', 'unit_cost']), 0);
     const totalBuyPrice = toNumber(findField(log, ['total', 'totalCost', 'total_cost', 'totalPrice', 'total_price', 'value', 'money']), 0);
     const seller = findField(log, ['seller', 'from', 'user', 'player']);
-    if (!itemName || (!unitBuyPrice && !totalBuyPrice)) return null;
+    if ((!resolved.itemName && !resolved.itemId) || (!unitBuyPrice && !totalBuyPrice)) return null;
     return normalizePriceFields({
-      itemId,
-      itemName,
+      parserKind: 'structured',
+      itemId: resolved.itemId,
+      itemName: resolved.itemName,
+      needsNameReview: resolved.needsNameReview,
       quantity,
       sellerName: extractActorName(seller),
       unitBuyPrice,
@@ -205,19 +316,22 @@ const FlipTrackerProLogImportService = (() => {
     }, 'unitBuyPrice', 'totalBuyPrice');
   }
 
-  function parseStructuredSale(log) {
+  function parseStructuredSale(log, itemLookup) {
     const itemValue = findField(log, ['itemName', 'item_name', 'item', 'itemId', 'item_id', 'itemid']);
     const itemName = extractItemName(findField(log, ['itemName', 'item_name', 'item'])) || extractItemName(itemValue);
     const itemId = extractItemId(findField(log, ['itemId', 'item_id', 'itemid'])) || extractItemId(itemValue);
+    const resolved = itemLookup.resolve(itemId, itemName);
     const quantity = toNumber(findField(log, ['quantity', 'qty', 'amount', 'count']), 0);
     const unitSellPrice = toNumber(findField(log, ['price', 'unitPrice', 'unit_price', 'sellPrice', 'sell_price']), 0);
     const totalSellPrice = toNumber(findField(log, ['total', 'totalRevenue', 'total_revenue', 'revenue', 'value', 'money']), 0);
     const fees = toNumber(findField(log, ['fee', 'fees', 'marketFee', 'market_fee']), 0);
     const buyer = findField(log, ['buyer', 'to', 'user', 'player']);
-    if (!itemName || (!unitSellPrice && !totalSellPrice)) return null;
+    if ((!resolved.itemName && !resolved.itemId) || (!unitSellPrice && !totalSellPrice)) return null;
     return normalizePriceFields({
-      itemId,
-      itemName,
+      parserKind: 'structured',
+      itemId: resolved.itemId,
+      itemName: resolved.itemName,
+      needsNameReview: resolved.needsNameReview,
       quantity,
       buyerName: extractActorName(buyer),
       unitSellPrice,
@@ -239,6 +353,8 @@ const FlipTrackerProLogImportService = (() => {
       return 'sell';
     }
     const text = getLogText(log);
+    if (isPipeBuyText(text)) return 'buy';
+    if (isPipeSellText(text)) return 'sell';
     if (parseItemMarketPurchase(text)) {
       counters.textBuyMatches += 1;
       return 'buy';
@@ -253,8 +369,7 @@ const FlipTrackerProLogImportService = (() => {
   function validateBuyCandidate(candidate) {
     if (!candidate) return { ok: false, reason: 'Parser did not return a buy candidate.' };
     if (!candidate.originalLogId) return { ok: false, reason: 'Missing entryId/originalLogId.' };
-    if (!candidate.logTypeId) return { ok: false, reason: 'Missing logTypeId.' };
-    if (!candidate.itemName || candidate.itemName === 'Unknown item') return { ok: false, reason: 'Missing item name.' };
+    if ((!candidate.itemId && !candidate.itemName) || candidate.itemName === 'Unknown item') return { ok: false, reason: 'Missing itemId or item name.' };
     if (!candidate.quantity || candidate.quantity <= 0) return { ok: false, reason: 'Missing quantity.' };
     if (!candidate.unitBuyPrice && !candidate.totalBuyPrice) return { ok: false, reason: 'Missing buy price.' };
     return { ok: true, reason: '' };
@@ -263,68 +378,144 @@ const FlipTrackerProLogImportService = (() => {
   function validateSellCandidate(candidate) {
     if (!candidate) return { ok: false, reason: 'Parser did not return a sell candidate.' };
     if (!candidate.originalLogId) return { ok: false, reason: 'Missing entryId/originalLogId.' };
-    if (!candidate.logTypeId) return { ok: false, reason: 'Missing logTypeId.' };
-    if (!candidate.itemName || candidate.itemName === 'Unknown item') return { ok: false, reason: 'Missing item name.' };
+    if ((!candidate.itemId && !candidate.itemName) || candidate.itemName === 'Unknown item') return { ok: false, reason: 'Missing itemId or item name.' };
     if (!candidate.quantity || candidate.quantity <= 0) return { ok: false, reason: 'Missing quantity.' };
     if (!candidate.unitSellPrice && !candidate.totalSellPrice) return { ok: false, reason: 'Missing sell price.' };
     return { ok: true, reason: '' };
   }
 
-  function normalizeBuyLog(log) {
-    const parsed = parseStructuredBuy(log) || parseItemMarketPurchase(getLogText(log));
-    if (!parsed) return { candidate: null, reason: 'No structured or text buy parser matched.' };
-    const resolved = normalizePriceFields(parsed, 'unitBuyPrice', 'totalBuyPrice');
-    const sellerNote = resolved.sellerName ? `Seller: ${resolved.sellerName}` : '';
+  function normalizeBuyLog(log, itemLookup) {
+    const parsed = parsePipeBuy(log, itemLookup) || parseStructuredBuy(log, itemLookup) || parseItemMarketPurchase(getLogText(log));
+    if (!parsed) return { candidate: null, reason: 'No pipe, structured, or text buy parser matched.', parserKind: '' };
+    const resolved = parsed.itemId || parsed.needsNameReview ? itemLookup.resolve(parsed.itemId, parsed.itemName) : { itemId: parsed.itemId, itemName: parsed.itemName, needsNameReview: false };
+    const priced = normalizePriceFields({ ...parsed, ...resolved }, 'unitBuyPrice', 'totalBuyPrice');
+    const sellerNote = priced.sellerName ? `Seller: ${priced.sellerName}` : '';
     const candidate = {
-      itemId: resolved.itemId || undefined,
-      itemName: resolved.itemName || 'Unknown item',
-      quantity: resolved.quantity,
-      unitBuyPrice: resolved.unitBuyPrice,
-      totalBuyPrice: resolved.totalBuyPrice,
-      remainingQuantity: resolved.quantity,
+      itemId: priced.itemId || undefined,
+      itemName: priced.itemName || (priced.itemId ? `Item #${priced.itemId}` : 'Unknown item'),
+      quantity: priced.quantity,
+      unitBuyPrice: priced.unitBuyPrice,
+      totalBuyPrice: priced.totalBuyPrice,
+      remainingQuantity: priced.quantity,
       createdAt: fromTimestamp(getLogTimestamp(log)),
       source: 'api',
       originalLogId: getEntryId(log),
       logTypeId: Number(log.logTypeId) || undefined,
-      notes: sellerNote || 'Imported from Torn log'
+      notes: sellerNote || 'Imported from Torn log',
+      needsNameReview: Boolean(priced.needsNameReview)
     };
     const validation = validateBuyCandidate(candidate);
-    return validation.ok ? { candidate, reason: '' } : { candidate: null, reason: validation.reason };
+    return validation.ok ? { candidate, reason: '', parserKind: parsed.parserKind || 'unknown' } : { candidate: null, reason: validation.reason, parserKind: parsed.parserKind || 'unknown', partial: candidate };
   }
 
-  function normalizeSellLog(log) {
-    const parsed = parseStructuredSale(log) || parseItemMarketSale(getLogText(log));
-    if (!parsed) return { candidate: null, reason: 'No structured or text sell parser matched.' };
-    const resolved = normalizePriceFields(parsed, 'unitSellPrice', 'totalSellPrice');
-    const buyerNote = resolved.buyerName ? `Buyer: ${resolved.buyerName}` : '';
+  function normalizeSellLog(log, itemLookup) {
+    const parsed = parsePipeSell(log, itemLookup) || parseStructuredSale(log, itemLookup) || parseItemMarketSale(getLogText(log));
+    if (!parsed) return { candidate: null, reason: 'No pipe, structured, or text sell parser matched.', parserKind: '' };
+    const resolved = parsed.itemId || parsed.needsNameReview ? itemLookup.resolve(parsed.itemId, parsed.itemName) : { itemId: parsed.itemId, itemName: parsed.itemName, needsNameReview: false };
+    const priced = normalizePriceFields({ ...parsed, ...resolved }, 'unitSellPrice', 'totalSellPrice');
+    const buyerNote = priced.buyerName ? `Buyer: ${priced.buyerName}` : '';
     const candidate = {
-      itemId: resolved.itemId || undefined,
-      itemName: resolved.itemName || 'Unknown item',
-      quantity: resolved.quantity,
-      unitSellPrice: resolved.unitSellPrice,
-      totalSellPrice: resolved.totalSellPrice,
-      fees: resolved.fees,
+      itemId: priced.itemId || undefined,
+      itemName: priced.itemName || (priced.itemId ? `Item #${priced.itemId}` : 'Unknown item'),
+      quantity: priced.quantity,
+      unitSellPrice: priced.unitSellPrice,
+      totalSellPrice: priced.totalSellPrice,
+      fees: priced.fees,
       soldAt: fromTimestamp(getLogTimestamp(log)),
       source: 'api',
       originalLogId: getEntryId(log),
       logTypeId: Number(log.logTypeId) || undefined,
-      notes: buyerNote || 'Imported from Torn log'
+      notes: buyerNote || 'Imported from Torn log',
+      needsNameReview: Boolean(priced.needsNameReview)
     };
     const validation = validateSellCandidate(candidate);
-    return validation.ok ? { candidate, reason: '' } : { candidate: null, reason: validation.reason };
+    return validation.ok ? { candidate, reason: '', parserKind: parsed.parserKind || 'unknown' } : { candidate: null, reason: validation.reason, parserKind: parsed.parserKind || 'unknown', partial: candidate };
   }
 
-  function createReviewCandidate(log, type, reason) {
+  function createReviewCandidate(log, type, reason, partial = {}) {
+    const isSell = type === 'sell';
     return {
       entryId: getEntryId(log),
       logTypeId: Number(log.logTypeId) || undefined,
       timestamp: fromTimestamp(getLogTimestamp(log)),
-      type: type === 'sell' ? 'sell' : 'buy',
+      type: isSell ? 'sell' : 'buy',
+      itemId: partial.itemId || undefined,
+      itemName: partial.itemName || '',
+      quantity: partial.quantity || '',
+      unitPrice: isSell ? partial.unitSellPrice || '' : partial.unitBuyPrice || '',
+      totalPrice: isSell ? partial.totalSellPrice || '' : partial.totalBuyPrice || '',
+      fees: partial.fees || '',
       textPreview: getLogText(log).slice(0, 320),
       rawKeys: Array.isArray(log.rawKeys) ? log.rawKeys.slice(0, 40) : [],
       rawSampleKeys: Array.isArray(log.rawSampleKeys) ? log.rawSampleKeys.slice(0, 40) : [],
       reason: reason || 'Parser could not create a valid import candidate.',
-      source: 'api'
+      source: 'api',
+      ignored: false
+    };
+  }
+
+  function upsertReviewItem(reviewQueue, item, storageService) {
+    const normalized = storageService.normalizeImportReviewItem(item);
+    const entryId = String(normalized.entryId || normalized.originalLogId || normalized.id);
+    let replaced = false;
+    const nextQueue = reviewQueue.map((current) => {
+      const currentId = String(current.entryId || current.originalLogId || current.id);
+      if (currentId !== entryId) return current;
+      replaced = true;
+      return { ...current, ...normalized, id: current.id || normalized.id, createdAt: current.createdAt || normalized.createdAt, updatedAt: new Date().toISOString(), ignored: false };
+    });
+    return (replaced ? nextQueue : [normalized, ...nextQueue]).slice(0, 100);
+  }
+
+  function removeReviewItem(reviewQueue, entryId) {
+    const id = String(entryId || '');
+    return reviewQueue.filter((item) => String(item.entryId || item.originalLogId || item.id) !== id);
+  }
+
+  function addFailureReason(summary, reason) {
+    const value = String(reason || '').trim();
+    if (!value) return;
+    if (!summary.parserFailureReasons.includes(value)) summary.parserFailureReasons.push(value);
+    summary.parserFailureReasons = summary.parserFailureReasons.slice(0, 10);
+    if (/parser|matched/i.test(value)) summary.parserFailures += 1;
+    else summary.validationFailures += 1;
+  }
+
+  function noteParserKind(summary, type, parserKind) {
+    if (type === 'buy' && parserKind === 'pipe') summary.pipeBuyMatches += 1;
+    if (type === 'sell' && parserKind === 'pipe') summary.pipeSellMatches += 1;
+    if (type === 'buy' && parserKind === 'structured') summary.structuredBuyMatches += 1;
+    if (type === 'sell' && parserKind === 'structured') summary.structuredSellMatches += 1;
+    if (type === 'buy' && parserKind === 'text') summary.textBuyMatches += 1;
+    if (type === 'sell' && parserKind === 'text') summary.textSellMatches += 1;
+  }
+
+  function saveSaleCandidate({ candidate, data, purchaseLots, sales, storageService, accountingService }) {
+    const accountingResult = accountingService && typeof accountingService.recordSale === 'function'
+      ? accountingService.recordSale({ purchaseLots, sale: candidate, settings: data.settings })
+      : { purchaseLots, saleRecord: candidate };
+    const unmatchedQuantity = Number(accountingResult.saleRecord.unmatchedQuantity) || 0;
+    const matchedQuantity = Number(accountingResult.saleRecord.matchedQuantity) || 0;
+    const warning = unmatchedQuantity > 0 ? `${candidate.itemName}: ${unmatchedQuantity} sold item(s) could not be matched to open purchases.` : '';
+    const saleRecord = {
+      ...accountingResult.saleRecord,
+      originalLogId: candidate.originalLogId,
+      logTypeId: candidate.logTypeId,
+      unmatchedSale: unmatchedQuantity > 0,
+      importWarning: warning,
+      notes: warning || accountingResult.saleRecord.notes || candidate.notes || 'Imported from Torn log'
+    };
+    if (unmatchedQuantity > 0 && matchedQuantity === 0) {
+      saleRecord.matchedBuyCost = 0;
+      saleRecord.grossProfit = 0;
+      saleRecord.netProfit = 0;
+      saleRecord.roi = 0;
+    }
+    return {
+      purchaseLots: accountingResult.purchaseLots,
+      sales: [storageService.normalizeSale(saleRecord), ...sales],
+      warning,
+      unmatched: Boolean(warning)
     };
   }
 
@@ -340,6 +531,7 @@ const FlipTrackerProLogImportService = (() => {
       purchasesSaved: 0,
       salesSaved: 0,
       duplicatesSkipped: 0,
+      ignoredItems: 0,
       unmatchedSales: 0,
       rawLogsReturned: 0,
       normalizedLogs: 0,
@@ -350,11 +542,17 @@ const FlipTrackerProLogImportService = (() => {
       sellCandidatesCreated: 0,
       buyIdMatches: 0,
       sellIdMatches: 0,
+      pipeBuyMatches: 0,
+      pipeSellMatches: 0,
       textBuyMatches: 0,
       textSellMatches: 0,
+      structuredBuyMatches: 0,
+      structuredSellMatches: 0,
       parserFailures: 0,
       validationFailures: 0,
+      parserFailureReasons: [],
       reviewCandidatesCreated: 0,
+      activeReviewItems: 0,
       warnings: [],
       errors: [],
       diagnosticMessage: '',
@@ -395,8 +593,12 @@ const FlipTrackerProLogImportService = (() => {
       normalizedLogs: summary.normalizedLogs || serviceDebug.normalizedLogs || 0,
       buyIdMatches: summary.buyIdMatches || serviceDebug.buyIdMatches || 0,
       sellIdMatches: summary.sellIdMatches || serviceDebug.sellIdMatches || 0,
+      pipeBuyMatches: summary.pipeBuyMatches || 0,
+      pipeSellMatches: summary.pipeSellMatches || 0,
       textBuyMatches: summary.textBuyMatches || 0,
       textSellMatches: summary.textSellMatches || 0,
+      structuredBuyMatches: summary.structuredBuyMatches || 0,
+      structuredSellMatches: summary.structuredSellMatches || 0,
       classifiedPurchases: summary.classifiedPurchases || 0,
       classifiedSales: summary.classifiedSales || 0,
       buyCandidatesCreated: summary.buyCandidatesCreated || 0,
@@ -406,10 +608,13 @@ const FlipTrackerProLogImportService = (() => {
       purchasesSaved: summary.purchasesSaved || 0,
       salesSaved: summary.salesSaved || 0,
       duplicatesSkipped: summary.duplicatesSkipped || 0,
+      ignoredItems: summary.ignoredItems || 0,
       unmatchedSales: summary.unmatchedSales || 0,
       reviewCandidatesCreated: summary.reviewCandidatesCreated || 0,
+      activeReviewItems: summary.activeReviewItems || 0,
       parserFailures: summary.parserFailures || 0,
       validationFailures: summary.validationFailures || 0,
+      parserFailureReasons: summary.parserFailureReasons || [],
       progress: summary.progress,
       firstLogs: (serviceDebug.firstLogs || []).slice(0, 5),
       firstRecognizedLogs: (serviceDebug.firstRecognizedLogs || serviceDebug.firstLogs || []).slice(0, 5),
@@ -452,7 +657,7 @@ const FlipTrackerProLogImportService = (() => {
       summary.diagnosticMessage = 'No new purchases or sales were imported. Check Needs review, parser failures, validation failures, and duplicates.';
       return summary;
     }
-    summary.diagnosticMessage = `Imported ${summary.purchasesImported} purchases and ${summary.salesImported} sales. Needs review: ${summary.reviewCandidatesCreated}.`;
+    summary.diagnosticMessage = `Imported ${summary.purchasesImported} purchases and ${summary.salesImported} sales. Needs review: ${summary.activeReviewItems || 0}.`;
     return summary;
   }
 
@@ -493,16 +698,16 @@ const FlipTrackerProLogImportService = (() => {
     summary.rawLogsReturned = result.debug && result.debug.rawLogsReturned ? result.debug.rawLogsReturned : logs.length;
     summary.normalizedLogs = logs.length;
     summary.logsReturned = logs.length;
-    summary.buyIdMatches = result.debug && result.debug.buyIdMatches || 0;
-    summary.sellIdMatches = result.debug && result.debug.sellIdMatches || 0;
     summary.progress.total = logs.length;
 
     const data = storageService.load(storagePrefix);
+    const itemLookup = createItemLookup(data);
     const importedLogIds = new Set(Array.isArray(data.importedLogIds) ? data.importedLogIds.map(String) : []);
-    const existingReviewIds = new Set(Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map((item) => String(item.entryId || item.originalLogId || item.id)) : []);
+    data.purchaseLots.forEach((lot) => { if (lot.originalLogId) importedLogIds.add(String(lot.originalLogId)); });
+    data.sales.forEach((sale) => { if (sale.originalLogId) importedLogIds.add(String(sale.originalLogId)); });
     let purchaseLots = [...data.purchaseLots];
     let sales = [...data.sales];
-    let reviewQueue = Array.isArray(data.importReviewQueue) ? [...data.importReviewQueue] : [];
+    let reviewQueue = Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map(storageService.normalizeImportReviewItem).filter((item) => !item.ignored) : [];
     const classifyStart = now();
     const counters = { buyIdMatches: 0, sellIdMatches: 0, textBuyMatches: 0, textSellMatches: 0 };
     let classifyMs = 0;
@@ -530,66 +735,43 @@ const FlipTrackerProLogImportService = (() => {
         continue;
       }
 
-      if (importedLogIds.has(entryId) || existingReviewIds.has(entryId)) {
+      if (importedLogIds.has(entryId)) {
         summary.duplicatesSkipped += 1;
         summary.progress.duplicatesSkipped += 1;
         if ((index + 1) % batchSize === 0) await yieldToBrowser();
         continue;
       }
 
-      if (type === 'buy') {
-        const parseStart = now();
-        const parsed = normalizeBuyLog(log);
-        parseMs += elapsed(parseStart);
-        if (parsed.candidate) {
+      const parseStart = now();
+      const parsed = type === 'buy' ? normalizeBuyLog(log, itemLookup) : normalizeSellLog(log, itemLookup);
+      parseMs += elapsed(parseStart);
+      noteParserKind(summary, type, parsed.parserKind);
+
+      if (parsed.candidate) {
+        if (type === 'buy') {
           summary.buyCandidatesCreated += 1;
           const lot = storageService.normalizePurchaseLot(parsed.candidate);
           purchaseLots = [lot, ...purchaseLots];
-          importedLogIds.add(entryId);
           summary.purchasesImported += 1;
           summary.purchasesSaved += 1;
         } else {
-          summary.parserFailures += parsed.reason && parsed.reason.includes('Parser') ? 1 : 0;
-          summary.validationFailures += parsed.reason && !parsed.reason.includes('Parser') ? 1 : 0;
-          reviewQueue = [storageService.normalizeImportReviewItem(createReviewCandidate(log, 'buy', parsed.reason)), ...reviewQueue].slice(0, 100);
-          existingReviewIds.add(entryId);
-          summary.reviewCandidatesCreated += 1;
-        }
-      } else if (type === 'sell') {
-        const parseStart = now();
-        const parsed = normalizeSellLog(log);
-        parseMs += elapsed(parseStart);
-        if (parsed.candidate) {
           summary.sellCandidatesCreated += 1;
-          const accountingResult = accountingService && typeof accountingService.recordSale === 'function'
-            ? accountingService.recordSale({ purchaseLots, sale: parsed.candidate, settings: data.settings })
-            : { purchaseLots, saleRecord: parsed.candidate };
-          const unmatchedQuantity = Number(accountingResult.saleRecord.unmatchedQuantity) || 0;
-          const matchedQuantity = Number(accountingResult.saleRecord.matchedQuantity) || 0;
-          const warning = unmatchedQuantity > 0 ? `${parsed.candidate.itemName}: ${unmatchedQuantity} sold item(s) could not be matched to open purchases.` : '';
-          const saleRecord = { ...accountingResult.saleRecord, originalLogId: entryId, logTypeId: parsed.candidate.logTypeId, unmatchedSale: unmatchedQuantity > 0, importWarning: warning, notes: warning || accountingResult.saleRecord.notes || parsed.candidate.notes || 'Imported from Torn log' };
-          if (unmatchedQuantity > 0 && matchedQuantity === 0) {
-            saleRecord.matchedBuyCost = 0;
-            saleRecord.grossProfit = 0;
-            saleRecord.netProfit = 0;
-            saleRecord.roi = 0;
-          }
-          purchaseLots = accountingResult.purchaseLots;
-          sales = [storageService.normalizeSale(saleRecord), ...sales];
-          importedLogIds.add(entryId);
+          const saleResult = saveSaleCandidate({ candidate: parsed.candidate, data, purchaseLots, sales, storageService, accountingService });
+          purchaseLots = saleResult.purchaseLots;
+          sales = saleResult.sales;
           summary.salesImported += 1;
           summary.salesSaved += 1;
-          if (warning) {
+          if (saleResult.warning) {
             summary.unmatchedSales += 1;
-            summary.warnings.push(warning);
+            summary.warnings.push(saleResult.warning);
           }
-        } else {
-          summary.parserFailures += parsed.reason && parsed.reason.includes('Parser') ? 1 : 0;
-          summary.validationFailures += parsed.reason && !parsed.reason.includes('Parser') ? 1 : 0;
-          reviewQueue = [storageService.normalizeImportReviewItem(createReviewCandidate(log, 'sell', parsed.reason)), ...reviewQueue].slice(0, 100);
-          existingReviewIds.add(entryId);
-          summary.reviewCandidatesCreated += 1;
         }
+        importedLogIds.add(entryId);
+        reviewQueue = removeReviewItem(reviewQueue, entryId);
+      } else {
+        addFailureReason(summary, parsed.reason);
+        reviewQueue = upsertReviewItem(reviewQueue, createReviewCandidate(log, type, parsed.reason, parsed.partial), storageService);
+        summary.reviewCandidatesCreated += 1;
       }
 
       if ((index + 1) % batchSize === 0) await yieldToBrowser();
@@ -597,8 +779,7 @@ const FlipTrackerProLogImportService = (() => {
 
     summary.buyIdMatches = counters.buyIdMatches;
     summary.sellIdMatches = counters.sellIdMatches;
-    summary.textBuyMatches = counters.textBuyMatches;
-    summary.textSellMatches = counters.textSellMatches;
+    summary.activeReviewItems = reviewQueue.filter((item) => !item.ignored).length;
     applyDiagnostic(summary, result);
 
     const storageStart = now();
@@ -622,11 +803,276 @@ const FlipTrackerProLogImportService = (() => {
     return summary;
   }
 
-  function runParserSelfTest() {
-    return parserSamples.map((sample) => ({ sample, buy: parseItemMarketPurchase(sample), sell: parseItemMarketSale(sample) }));
+  function buildLogFromReviewItem(item) {
+    return {
+      entryId: item.entryId || item.originalLogId || item.id,
+      originalLogId: item.entryId || item.originalLogId || item.id,
+      logTypeId: item.logTypeId,
+      timestamp: item.timestamp,
+      text: item.textPreview,
+      message: item.textPreview,
+      title: item.textPreview,
+      rawKeys: item.rawKeys || [],
+      rawSampleKeys: item.rawSampleKeys || []
+    };
   }
 
-  return { importLogs, runParserSelfTest };
+  function getReviewItem(reviewQueue, reviewId) {
+    const id = String(reviewId || '');
+    return reviewQueue.find((item) => String(item.id) === id || String(item.entryId) === id || String(item.originalLogId) === id) || null;
+  }
+
+  function buildReviewPurchaseCandidate(item, values = {}, itemLookup) {
+    const itemId = values.itemId || item.itemId || undefined;
+    const resolved = itemLookup.resolve(itemId, values.itemName || item.itemName || '');
+    const quantity = calculateQuantity(values.quantity || item.quantity, toNumber(values.unitPrice || item.unitPrice), toNumber(values.totalPrice || item.totalPrice));
+    const priced = normalizePriceFields({
+      itemId: resolved.itemId,
+      itemName: resolved.itemName,
+      needsNameReview: resolved.needsNameReview,
+      quantity,
+      unitBuyPrice: toNumber(values.unitPrice || item.unitPrice),
+      totalBuyPrice: toNumber(values.totalPrice || item.totalPrice)
+    }, 'unitBuyPrice', 'totalBuyPrice');
+    return {
+      itemId: priced.itemId,
+      itemName: priced.itemName || (priced.itemId ? `Item #${priced.itemId}` : ''),
+      quantity: priced.quantity,
+      unitBuyPrice: priced.unitBuyPrice,
+      totalBuyPrice: priced.totalBuyPrice,
+      remainingQuantity: priced.quantity,
+      createdAt: item.timestamp || new Date().toISOString(),
+      source: 'api',
+      originalLogId: item.entryId || item.originalLogId,
+      logTypeId: item.logTypeId,
+      notes: 'Saved from import review',
+      needsNameReview: Boolean(priced.needsNameReview)
+    };
+  }
+
+  function buildReviewSaleCandidate(item, values = {}, itemLookup) {
+    const itemId = values.itemId || item.itemId || undefined;
+    const resolved = itemLookup.resolve(itemId, values.itemName || item.itemName || '');
+    const quantity = calculateQuantity(values.quantity || item.quantity, toNumber(values.unitPrice || item.unitPrice), toNumber(values.totalPrice || item.totalPrice));
+    const priced = normalizePriceFields({
+      itemId: resolved.itemId,
+      itemName: resolved.itemName,
+      needsNameReview: resolved.needsNameReview,
+      quantity,
+      unitSellPrice: toNumber(values.unitPrice || item.unitPrice),
+      totalSellPrice: toNumber(values.totalPrice || item.totalPrice),
+      fees: toNumber(values.fees || item.fees)
+    }, 'unitSellPrice', 'totalSellPrice');
+    return {
+      itemId: priced.itemId,
+      itemName: priced.itemName || (priced.itemId ? `Item #${priced.itemId}` : ''),
+      quantity: priced.quantity,
+      unitSellPrice: priced.unitSellPrice,
+      totalSellPrice: priced.totalSellPrice,
+      fees: priced.fees,
+      soldAt: item.timestamp || new Date().toISOString(),
+      source: 'api',
+      originalLogId: item.entryId || item.originalLogId,
+      logTypeId: item.logTypeId,
+      notes: 'Saved from import review',
+      needsNameReview: Boolean(priced.needsNameReview)
+    };
+  }
+
+  function saveReviewItem(storagePrefix, reviewId, values = {}, forceType = '') {
+    const storageService = getStorageService();
+    const accountingService = getAccountingService();
+    if (!storageService) return { ok: false, message: 'Storage service is unavailable.' };
+    let response = { ok: false, message: 'Review item was not found.' };
+    storageService.update(storagePrefix, (data) => {
+      const reviewQueue = Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map(storageService.normalizeImportReviewItem) : [];
+      const item = getReviewItem(reviewQueue, reviewId);
+      if (!item) return data;
+      const importedLogIds = new Set(Array.isArray(data.importedLogIds) ? data.importedLogIds.map(String) : []);
+      const type = forceType || item.type;
+      if (type === 'sell') {
+        const candidate = buildReviewSaleCandidate(item, values, createItemLookup(data));
+        const validation = validateSellCandidate(candidate);
+        if (!validation.ok) {
+          response = { ok: false, message: validation.reason };
+          return data;
+        }
+        const saleResult = saveSaleCandidate({ candidate, data, purchaseLots: data.purchaseLots, sales: data.sales, storageService, accountingService });
+        importedLogIds.add(String(item.entryId || item.originalLogId));
+        response = { ok: true, message: saleResult.warning || 'Review item saved as a sale.' };
+        return {
+          ...data,
+          purchaseLots: saleResult.purchaseLots,
+          sales: saleResult.sales,
+          importedLogIds: [...importedLogIds],
+          importReviewQueue: removeReviewItem(reviewQueue, item.entryId),
+          settings: { ...data.settings, logImportDebug: { ...(data.settings.logImportDebug || {}), updatedAt: new Date().toISOString() } }
+        };
+      }
+      const candidate = buildReviewPurchaseCandidate(item, values, createItemLookup(data));
+      const validation = validateBuyCandidate(candidate);
+      if (!validation.ok) {
+        response = { ok: false, message: validation.reason };
+        return data;
+      }
+      importedLogIds.add(String(item.entryId || item.originalLogId));
+      response = { ok: true, message: 'Review item saved as a purchase.' };
+      return {
+        ...data,
+        purchaseLots: [storageService.normalizePurchaseLot(candidate), ...data.purchaseLots],
+        importedLogIds: [...importedLogIds],
+        importReviewQueue: removeReviewItem(reviewQueue, item.entryId),
+        settings: { ...data.settings, logImportDebug: { ...(data.settings.logImportDebug || {}), updatedAt: new Date().toISOString() } }
+      };
+    });
+    return response;
+  }
+
+  function ignoreReviewItem(storagePrefix, reviewId) {
+    const storageService = getStorageService();
+    if (!storageService) return { ok: false, message: 'Storage service is unavailable.' };
+    let response = { ok: false, message: 'Review item was not found.' };
+    storageService.update(storagePrefix, (data) => {
+      const reviewQueue = Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map(storageService.normalizeImportReviewItem) : [];
+      const item = getReviewItem(reviewQueue, reviewId);
+      if (!item) return data;
+      const importedLogIds = new Set(Array.isArray(data.importedLogIds) ? data.importedLogIds.map(String) : []);
+      importedLogIds.add(String(item.entryId || item.originalLogId));
+      response = { ok: true, message: 'Review item ignored.' };
+      return {
+        ...data,
+        importedLogIds: [...importedLogIds],
+        importReviewQueue: removeReviewItem(reviewQueue, item.entryId),
+        settings: { ...data.settings, logImportDebug: { ...(data.settings.logImportDebug || {}), ignoredItems: Number(data.settings.logImportDebug && data.settings.logImportDebug.ignoredItems || 0) + 1, updatedAt: new Date().toISOString() } }
+      };
+    });
+    return response;
+  }
+
+  function deleteReviewItem(storagePrefix, reviewId) {
+    const storageService = getStorageService();
+    if (!storageService) return { ok: false, message: 'Storage service is unavailable.' };
+    let response = { ok: false, message: 'Review item was not found.' };
+    storageService.update(storagePrefix, (data) => {
+      const reviewQueue = Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map(storageService.normalizeImportReviewItem) : [];
+      const item = getReviewItem(reviewQueue, reviewId);
+      if (!item) return data;
+      response = { ok: true, message: 'Review item deleted. It can be imported again later.' };
+      return { ...data, importReviewQueue: removeReviewItem(reviewQueue, item.entryId) };
+    });
+    return response;
+  }
+
+  function clearReviewQueue(storagePrefix) {
+    const storageService = getStorageService();
+    if (!storageService) return { ok: false, message: 'Storage service is unavailable.' };
+    storageService.update(storagePrefix, (data) => ({ ...data, importReviewQueue: [] }));
+    return { ok: true, message: 'Needs review queue cleared.' };
+  }
+
+  function resetImportState(storagePrefix) {
+    const storageService = getStorageService();
+    if (!storageService) return { ok: false, message: 'Storage service is unavailable.' };
+    storageService.update(storagePrefix, (data) => ({
+      ...data,
+      importedLogIds: [],
+      importReviewQueue: [],
+      importHistory: [],
+      settings: { ...data.settings, logImportDebug: {}, logImportLastRunAt: '' }
+    }));
+    return { ok: true, message: 'Import state reset. Purchases, sales, settings, API key, and window state were preserved.' };
+  }
+
+  async function retryReviewQueue(storagePrefix) {
+    const storageService = getStorageService();
+    const accountingService = getAccountingService();
+    const summary = createEmptySummary('', '');
+    summary.rangeUsed = 'review-retry';
+    if (!storageService) return { ...summary, ok: false, errors: ['Storage service is unavailable.'] };
+    const totalStart = now();
+    const data = storageService.load(storagePrefix);
+    const itemLookup = createItemLookup(data);
+    const importedLogIds = new Set(Array.isArray(data.importedLogIds) ? data.importedLogIds.map(String) : []);
+    let purchaseLots = [...data.purchaseLots];
+    let sales = [...data.sales];
+    let reviewQueue = Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map(storageService.normalizeImportReviewItem).filter((item) => !item.ignored) : [];
+    const nextReviewQueue = [];
+
+    for (let index = 0; index < reviewQueue.length; index += 1) {
+      const item = reviewQueue[index];
+      const entryId = String(item.entryId || item.originalLogId || item.id);
+      if (importedLogIds.has(entryId)) {
+        summary.duplicatesSkipped += 1;
+        continue;
+      }
+      const log = buildLogFromReviewItem(item);
+      const type = item.type === 'sell' ? 'sell' : 'buy';
+      const parsed = type === 'buy' ? normalizeBuyLog(log, itemLookup) : normalizeSellLog(log, itemLookup);
+      noteParserKind(summary, type, parsed.parserKind);
+      if (parsed.candidate) {
+        if (type === 'buy') {
+          purchaseLots = [storageService.normalizePurchaseLot(parsed.candidate), ...purchaseLots];
+          summary.purchasesImported += 1;
+          summary.purchasesSaved += 1;
+          summary.buyCandidatesCreated += 1;
+        } else {
+          const saleResult = saveSaleCandidate({ candidate: parsed.candidate, data, purchaseLots, sales, storageService, accountingService });
+          purchaseLots = saleResult.purchaseLots;
+          sales = saleResult.sales;
+          summary.salesImported += 1;
+          summary.salesSaved += 1;
+          summary.sellCandidatesCreated += 1;
+          if (saleResult.warning) {
+            summary.unmatchedSales += 1;
+            summary.warnings.push(saleResult.warning);
+          }
+        }
+        importedLogIds.add(entryId);
+      } else {
+        addFailureReason(summary, parsed.reason);
+        nextReviewQueue.push(storageService.normalizeImportReviewItem({ ...item, reason: parsed.reason, updatedAt: new Date().toISOString() }));
+      }
+      if ((index + 1) % batchSize === 0) await yieldToBrowser();
+    }
+
+    summary.activeReviewItems = nextReviewQueue.length;
+    summary.reviewCandidatesCreated = nextReviewQueue.length;
+    summary.diagnosticMessage = `Retry imported ${summary.purchasesImported} purchases and ${summary.salesImported} sales. Still needs review: ${nextReviewQueue.length}.`;
+    const debug = buildDebug({ debug: data.settings.logImportDebug || {} }, summary, { totalImportMs: elapsed(totalStart) });
+    storageService.save(storagePrefix, {
+      ...data,
+      purchaseLots,
+      sales,
+      importedLogIds: [...importedLogIds],
+      importReviewQueue: nextReviewQueue,
+      settings: { ...data.settings, logImportDebug: debug, logImportLastRunAt: new Date().toISOString() }
+    });
+    summary.debug = debug;
+    return summary;
+  }
+
+  function runParserSelfTest() {
+    const itemLookup = createItemLookup({});
+    return parserSamples.map((sample) => {
+      const log = { entryId: `sample-${sample.slice(0, 20)}`, logTypeId: isPipeSellText(sample) ? 1226 : 1112, text: sample, message: sample, timestamp: Date.now() / 1000 };
+      return {
+        sample,
+        buy: normalizeBuyLog(log, itemLookup),
+        sell: normalizeSellLog(log, itemLookup)
+      };
+    });
+  }
+
+  return {
+    clearReviewQueue,
+    deleteReviewItem,
+    ignoreReviewItem,
+    importLogs,
+    resetImportState,
+    retryReviewQueue,
+    runParserSelfTest,
+    saveReviewItem
+  };
 })();
 
 if (typeof window !== 'undefined') {
