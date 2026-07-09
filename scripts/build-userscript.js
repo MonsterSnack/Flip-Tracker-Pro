@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '0.8.1';
+const VERSION = '0.8.2';
 const ROOT = path.resolve(__dirname, '..');
 const DIST_PATH = path.join(ROOT, 'dist', 'flip-tracker-pro.user.js');
 
@@ -97,7 +97,6 @@ function stripWindowExports(source) {
     output = output.replace(new RegExp(`window\\.${name}`, 'g'), name);
   });
 
-  output = output.replace(/\n?if \(typeof window !== 'undefined'\) \{\s*FlipTrackerProConfig = FlipTrackerProConfig;\s*injectFlipTrackerProApiKeyHelper\(\);\s*\}\s*/g, '\nif (typeof window !== \'undefined\') {\n  injectFlipTrackerProApiKeyHelper();\n}\n');
   output = output.replace(/window\.localStorage/g, 'localStorage');
   output = output.replace(/window\.alert/g, 'alert');
   output = output.replace(/window\.confirm/g, 'confirm');
