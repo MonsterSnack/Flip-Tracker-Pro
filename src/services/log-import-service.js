@@ -1,14 +1,36 @@
 const FlipTrackerProLogImportService = (() => {
   const batchSize = 75;
-  const parserSamples = Object.freeze([
-    'Item market buy | 4378669 | 0 | 1301 | 5 | 1450 | 290 | 1 | green',
-    'Item market sell | 4378670 | 0 | 1301 | 5 | 1750 | 350 | 1 | green',
-    '12:20:00 - 09/07/26 You bought 5x CPU on the item market from t_bombadil at $290 each for a total of $1,450',
-    'You bought 5x CPU on the item market from t_bombadil at $290 each for a total of $1,450',
-    'You bought a Credit Card on the item market from Max_Lexie at $400 each for a total of $400',
-    'You bought an eCPU on the item market from TheAngryYeti at $350 each for a total of $350',
-    'You bought a Box of Tissues on the item market from Shayari at $300 each for a total of $300',
-    '20:37:53 - 24/07/25 You sold 54x Dahlia on the item market to Javster at $1,900 each for a total of $97,470 after $5,130 in fees'
+
+  const parserSelfTestCases = Object.freeze([
+    {
+      name: 'readable-buy-cpu',
+      type: 'buy',
+      logTypeId: 1112,
+      text: '18:18:23 - 09/07/26 You bought 11x CPU on the item market from someone at $325 each for a total of $3,575',
+      expected: { quantity: 11, itemName: 'CPU', sellerName: 'someone', unitBuyPrice: 325, totalBuyPrice: 3575 }
+    },
+    {
+      name: 'pipe-buy-cpu',
+      type: 'buy',
+      logTypeId: 1112,
+      text: 'Item market buy | 4378669 | 0 | 1301 | 5 | 1450 | 290 | 1 | green',
+      expected: { itemId: '1301', quantity: 5, unitBuyPrice: 290, totalBuyPrice: 1450 }
+    },
+    {
+      name: 'buried-pipe-buy-cpu',
+      type: 'buy',
+      logTypeId: 1112,
+      text: 'Item market buy',
+      raw: { title: 'Item market buy', details: ['4378669', '0', '1301', '5', '1450', '290', '1', 'green'] },
+      expected: { itemId: '1301', quantity: 5, unitBuyPrice: 290, totalBuyPrice: 1450 }
+    },
+    {
+      name: 'readable-sell-dahlia',
+      type: 'sell',
+      logTypeId: 1226,
+      text: '20:37:53 - 24/07/25 You sold 54x Dahlia on the item market to Javster at $1,900 each for a total of $97,470 after $5,130 in fees',
+      expected: { quantity: 54, itemName: 'Dahlia', buyerName: 'Javster', unitSellPrice: 1900, totalSellPrice: 97470, fees: 5130 }
+    }
   ]);
 
   function now() {
@@ -92,13 +114,13 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function collectFieldValues(value, output = [], depth = 0) {
-    if (!value || depth > 5 || output.length >= 180) return output;
+    if (!value || depth > 5 || output.length >= 220) return output;
     if (Array.isArray(value)) {
-      value.slice(0, 25).forEach((entry) => collectFieldValues(entry, output, depth + 1));
+      value.slice(0, 40).forEach((entry) => collectFieldValues(entry, output, depth + 1));
       return output;
     }
     if (typeof value === 'object') {
-      Object.entries(value).slice(0, 70).forEach(([key, entry]) => {
+      Object.entries(value).slice(0, 90).forEach(([key, entry]) => {
         if (/key|token|secret|password/i.test(key)) return;
         output.push({ key, value: entry });
         collectFieldValues(entry, output, depth + 1);
@@ -108,7 +130,8 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function getParseRoots(log) {
-    return [log.raw, log.data, log.params, log].filter((value, index, values) => value && typeof value === 'object' && values.indexOf(value) === index);
+    const raw = log && log.raw && typeof log.raw === 'object' ? log.raw : {};
+    return [log.raw, log.data, log.params, log.details, raw.data, raw.params, raw.details, log].filter((value, index, values) => value && typeof value === 'object' && values.indexOf(value) === index);
   }
 
   function findField(log, names) {
@@ -166,7 +189,7 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function scanItems(value, itemMap, depth = 0) {
-    if (!value || depth > 4) return;
+    if (!value || depth > 5) return;
     if (Array.isArray(value)) {
       value.slice(0, 5000).forEach((entry) => scanItems(entry, itemMap, depth + 1));
       return;
@@ -190,6 +213,7 @@ const FlipTrackerProLogImportService = (() => {
     scanItems(data.tornItems, itemMap);
     scanItems(data.settings && data.settings.itemMap, itemMap);
     scanItems(data.settings && data.settings.tornItems, itemMap);
+    scanItems(data.settings && data.settings.itemPriceSnapshots, itemMap);
 
     return {
       resolve(itemId, fallbackName = '') {
@@ -208,21 +232,153 @@ const FlipTrackerProLogImportService = (() => {
 
   function splitPipeLog(text) {
     const parts = String(text || '').split('|').map((part) => part.trim()).filter((part) => part !== '');
-    return parts.length >= 7 ? parts : null;
+    return parts.length >= 2 ? parts : null;
   }
 
-  function isPipeBuyText(text) {
-    const parts = splitPipeLog(text);
+  function isPipeTitle(value) {
+    return /item\s+market\s+(buy|sell|sale)/i.test(String(value || '')) || /market\s+sell/i.test(String(value || ''));
+  }
+
+  function pipeTitleFromLog(log) {
+    const candidates = [log && log.title, log && log.text, log && log.message, getLogText(log), log && log.raw && log.raw.title, log && log.raw && log.raw.log, log && log.raw && log.raw.event];
+    for (const candidate of candidates) {
+      const text = String(candidate || '').trim();
+      if (/item\s+market\s+buy/i.test(text)) return 'Item market buy';
+      if (/(item\s+market\s+(sell|sale)|market\s+sell)/i.test(text)) return 'Item market sell';
+    }
+    return '';
+  }
+
+  function sortObjectKeys(keys) {
+    return keys.sort((left, right) => {
+      const leftNumeric = /^\d+$/.test(left);
+      const rightNumeric = /^\d+$/.test(right);
+      if (leftNumeric && rightNumeric) return Number(left) - Number(right);
+      if (leftNumeric) return -1;
+      if (rightNumeric) return 1;
+      return left.localeCompare(right);
+    });
+  }
+
+  function primitivePartsFromArray(array) {
+    return array
+      .filter((entry) => ['string', 'number', 'boolean'].includes(typeof entry))
+      .map((entry) => String(entry).trim())
+      .filter(Boolean);
+  }
+
+  function primitivePartsFromObject(object) {
+    return sortObjectKeys(Object.keys(object || {}))
+      .map((key) => object[key])
+      .filter((entry) => ['string', 'number', 'boolean'].includes(typeof entry))
+      .map((entry) => String(entry).trim())
+      .filter(Boolean);
+  }
+
+  function normalizePipeParts(parts, titleHint = '') {
+    if (!Array.isArray(parts)) return null;
+    const cleaned = parts.map((part) => String(part || '').trim()).filter(Boolean);
+    if (!cleaned.length) return null;
+    const titleIndex = cleaned.findIndex(isPipeTitle);
+    const titledParts = titleIndex >= 0 ? cleaned.slice(titleIndex) : titleHint ? [titleHint, ...cleaned] : cleaned;
+    if (!isPipeTitle(titledParts[0]) || titledParts.length < 7) return null;
+    return titledParts.slice(0, 12);
+  }
+
+  function scanPipeParts(value, titleHint = '', depth = 0, output = []) {
+    if (output.length || value === null || value === undefined || depth > 5) return output;
+
+    if (typeof value === 'string') {
+      if (value.includes('|')) {
+        const parts = normalizePipeParts(splitPipeLog(value), titleHint);
+        if (parts) output.push(parts);
+      }
+      return output;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') return output;
+
+    if (Array.isArray(value)) {
+      for (const entry of value.slice(0, 50)) {
+        if (typeof entry === 'string' && entry.includes('|')) {
+          const parts = normalizePipeParts(splitPipeLog(entry), titleHint);
+          if (parts) {
+            output.push(parts);
+            return output;
+          }
+        }
+      }
+      const primitiveParts = primitivePartsFromArray(value);
+      const arrayParts = normalizePipeParts(primitiveParts, titleHint);
+      if (arrayParts) {
+        output.push(arrayParts);
+        return output;
+      }
+      value.slice(0, 50).forEach((entry) => scanPipeParts(entry, titleHint, depth + 1, output));
+      return output;
+    }
+
+    if (typeof value === 'object') {
+      const objectTitle = pipeTitleFromLog(value) || titleHint;
+      for (const key of sortObjectKeys(Object.keys(value)).slice(0, 80)) {
+        if (/key|token|secret|password/i.test(key)) continue;
+        const entry = value[key];
+        if (typeof entry === 'string' && entry.includes('|')) {
+          const parts = normalizePipeParts(splitPipeLog(entry), objectTitle);
+          if (parts) {
+            output.push(parts);
+            return output;
+          }
+        }
+      }
+      const primitiveParts = primitivePartsFromObject(value);
+      const objectParts = normalizePipeParts(primitiveParts, objectTitle);
+      if (objectParts) {
+        output.push(objectParts);
+        return output;
+      }
+      for (const key of sortObjectKeys(Object.keys(value)).slice(0, 80)) {
+        if (/key|token|secret|password/i.test(key)) continue;
+        scanPipeParts(value[key], objectTitle, depth + 1, output);
+        if (output.length) return output;
+      }
+    }
+
+    return output;
+  }
+
+  function extractPipePartsFromLog(log) {
+    const titleHint = pipeTitleFromLog(log);
+    const directStrings = [getLogText(log), log && log.text, log && log.message, log && log.title, log && log.raw && log.raw.title].filter(Boolean);
+
+    for (const text of directStrings) {
+      const direct = normalizePipeParts(splitPipeLog(text), titleHint);
+      if (direct) return direct;
+    }
+
+    const raw = log && log.raw && typeof log.raw === 'object' ? log.raw : {};
+    const roots = [log && log.data, log && log.params, log && log.details, raw.data, raw.params, raw.details, raw, log].filter((root, index, rootsList) => root && typeof root === 'object' && rootsList.indexOf(root) === index);
+
+    for (const root of roots) {
+      const matches = scanPipeParts(root, titleHint, 0, []);
+      if (matches.length) return matches[0];
+    }
+
+    return null;
+  }
+
+  function isPipeBuyLog(log) {
+    const parts = extractPipePartsFromLog(log);
     return Boolean(parts && /item\s+market\s+buy/i.test(parts[0]));
   }
 
-  function isPipeSellText(text) {
-    const parts = splitPipeLog(text);
+  function isPipeSellLog(log) {
+    const parts = extractPipePartsFromLog(log);
     return Boolean(parts && /(item\s+market\s+(sell|sale)|market\s+sell)/i.test(parts[0]));
   }
 
   function parsePipeBuy(log, itemLookup) {
-    const parts = splitPipeLog(getLogText(log));
+    const parts = extractPipePartsFromLog(log);
     if (!parts || !/item\s+market\s+buy/i.test(parts[0])) return null;
     const itemId = toNumber(parts[3], 0);
     const quantity = toNumber(parts[4], 0);
@@ -232,6 +388,7 @@ const FlipTrackerProLogImportService = (() => {
     const resolved = itemLookup.resolve(itemId ? String(itemId) : '');
     return normalizePriceFields({
       parserKind: 'pipe',
+      pipeParts: parts,
       itemId: resolved.itemId,
       itemName: resolved.itemName,
       needsNameReview: resolved.needsNameReview,
@@ -242,7 +399,7 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function parsePipeSell(log, itemLookup) {
-    const parts = splitPipeLog(getLogText(log));
+    const parts = extractPipePartsFromLog(log);
     if (!parts || !/(item\s+market\s+(sell|sale)|market\s+sell)/i.test(parts[0])) return null;
     const itemId = toNumber(parts[3], 0);
     const quantity = toNumber(parts[4], 0);
@@ -253,6 +410,7 @@ const FlipTrackerProLogImportService = (() => {
     const resolved = itemLookup.resolve(itemId ? String(itemId) : '');
     return normalizePriceFields({
       parserKind: 'pipe',
+      pipeParts: parts,
       itemId: resolved.itemId,
       itemName: resolved.itemName,
       needsNameReview: resolved.needsNameReview,
@@ -264,7 +422,8 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function parseItemMarketPurchase(text) {
-    const match = String(text).match(/(?:^|\b)(?:\d{1,2}:\d{2}:\d{2}\s+-\s+\d{2}\/\d{2}\/\d{2}\s+)?you bought\s+(?:(\d{1,8})\s*x\s+)?(?:an?\s+)?(.+?)\s+on the item market\s+from\s+(.+?)\s+at\s+\$?([0-9][0-9,]*)\s+each\s+for\s+a\s+total\s+of\s+\$?([0-9][0-9,]*)/i);
+    // Torn readable buy log: time/date + quantity + item + market + seller + unit price + total buy price.
+    const match = String(text).match(/(?:^|\b)(?:\d{1,2}:\d{2}:\d{2}\s+-\s+\d{2}\/\d{2}\/\d{2}\s+)?you bought\s+(?:(\d{1,8})\s*x\s+)?(?:an?\s+)?(.+?)\s+on the item market\s+from\s+([A-Za-z0-9_ -]+?)\s+at\s+\$?([0-9][0-9,]*)\s+each\s+for\s+a\s+total\s+of\s+\$?([0-9][0-9,]*)/i);
     if (!match) return null;
     const unitBuyPrice = parseMoneyValue(match[4]);
     const totalBuyPrice = parseMoneyValue(match[5]);
@@ -272,6 +431,7 @@ const FlipTrackerProLogImportService = (() => {
       parserKind: 'text',
       itemName: match[2].trim(),
       quantity: calculateQuantity(match[1], unitBuyPrice, totalBuyPrice),
+      sourceMarket: 'item market',
       sellerName: match[3].trim(),
       unitBuyPrice,
       totalBuyPrice
@@ -279,7 +439,8 @@ const FlipTrackerProLogImportService = (() => {
   }
 
   function parseItemMarketSale(text) {
-    const match = String(text).match(/(?:^|\b)(?:\d{1,2}:\d{2}:\d{2}\s+-\s+\d{2}\/\d{2}\/\d{2}\s+)?you sold\s+(?:(\d{1,8})\s*x\s+)?(?:an?\s+)?(.+?)\s+on the item market\s+to\s+(.+?)\s+at\s+\$?([0-9][0-9,]*)\s+each\s+for\s+a\s+total\s+of\s+\$?([0-9][0-9,]*)(?:\s+after\s+\$?([0-9][0-9,]*)\s+in\s+fees?)?/i);
+    // Torn readable sell log: time/date + quantity + item + market + buyer + unit price + sale total + optional fees.
+    const match = String(text).match(/(?:^|\b)(?:\d{1,2}:\d{2}:\d{2}\s+-\s+\d{2}\/\d{2}\/\d{2}\s+)?you sold\s+(?:(\d{1,8})\s*x\s+)?(?:an?\s+)?(.+?)\s+on the item market\s+to\s+([A-Za-z0-9_ -]+?)\s+at\s+\$?([0-9][0-9,]*)\s+each\s+for\s+a\s+total\s+of\s+\$?([0-9][0-9,]*)(?:\s+after\s+\$?([0-9][0-9,]*)\s+in\s+fees?)?/i);
     if (!match) return null;
     const unitSellPrice = parseMoneyValue(match[4]);
     const totalSellPrice = parseMoneyValue(match[5]);
@@ -287,6 +448,7 @@ const FlipTrackerProLogImportService = (() => {
       parserKind: 'text',
       itemName: match[2].trim(),
       quantity: calculateQuantity(match[1], unitSellPrice, totalSellPrice),
+      sourceMarket: 'item market',
       buyerName: match[3] ? match[3].trim() : '',
       unitSellPrice,
       totalSellPrice,
@@ -300,8 +462,8 @@ const FlipTrackerProLogImportService = (() => {
     const itemId = extractItemId(findField(log, ['itemId', 'item_id', 'itemid'])) || extractItemId(itemValue);
     const resolved = itemLookup.resolve(itemId, itemName);
     const quantity = toNumber(findField(log, ['quantity', 'qty', 'amount', 'count']), 0);
-    const unitBuyPrice = toNumber(findField(log, ['price', 'unitPrice', 'unit_price', 'cost', 'unitCost', 'unit_cost']), 0);
-    const totalBuyPrice = toNumber(findField(log, ['total', 'totalCost', 'total_cost', 'totalPrice', 'total_price', 'value', 'money']), 0);
+    const unitBuyPrice = toNumber(findField(log, ['price', 'unitPrice', 'unit_price', 'cost', 'unitCost', 'unit_cost', 'unitBuyPrice', 'unit_buy_price']), 0);
+    const totalBuyPrice = toNumber(findField(log, ['total', 'totalCost', 'total_cost', 'totalPrice', 'total_price', 'value', 'money', 'totalBuyPrice', 'total_buy_price']), 0);
     const seller = findField(log, ['seller', 'from', 'user', 'player']);
     if ((!resolved.itemName && !resolved.itemId) || (!unitBuyPrice && !totalBuyPrice)) return null;
     return normalizePriceFields({
@@ -310,6 +472,7 @@ const FlipTrackerProLogImportService = (() => {
       itemName: resolved.itemName,
       needsNameReview: resolved.needsNameReview,
       quantity,
+      sourceMarket: 'item market',
       sellerName: extractActorName(seller),
       unitBuyPrice,
       totalBuyPrice
@@ -322,8 +485,8 @@ const FlipTrackerProLogImportService = (() => {
     const itemId = extractItemId(findField(log, ['itemId', 'item_id', 'itemid'])) || extractItemId(itemValue);
     const resolved = itemLookup.resolve(itemId, itemName);
     const quantity = toNumber(findField(log, ['quantity', 'qty', 'amount', 'count']), 0);
-    const unitSellPrice = toNumber(findField(log, ['price', 'unitPrice', 'unit_price', 'sellPrice', 'sell_price']), 0);
-    const totalSellPrice = toNumber(findField(log, ['total', 'totalRevenue', 'total_revenue', 'revenue', 'value', 'money']), 0);
+    const unitSellPrice = toNumber(findField(log, ['price', 'unitPrice', 'unit_price', 'sellPrice', 'sell_price', 'unitSellPrice', 'unit_sell_price']), 0);
+    const totalSellPrice = toNumber(findField(log, ['total', 'totalRevenue', 'total_revenue', 'revenue', 'value', 'money', 'totalSellPrice', 'total_sell_price']), 0);
     const fees = toNumber(findField(log, ['fee', 'fees', 'marketFee', 'market_fee']), 0);
     const buyer = findField(log, ['buyer', 'to', 'user', 'player']);
     if ((!resolved.itemName && !resolved.itemId) || (!unitSellPrice && !totalSellPrice)) return null;
@@ -333,6 +496,7 @@ const FlipTrackerProLogImportService = (() => {
       itemName: resolved.itemName,
       needsNameReview: resolved.needsNameReview,
       quantity,
+      sourceMarket: 'item market',
       buyerName: extractActorName(buyer),
       unitSellPrice,
       totalSellPrice,
@@ -352,9 +516,9 @@ const FlipTrackerProLogImportService = (() => {
       counters.sellIdMatches += 1;
       return 'sell';
     }
+    if (isPipeBuyLog(log)) return 'buy';
+    if (isPipeSellLog(log)) return 'sell';
     const text = getLogText(log);
-    if (isPipeBuyText(text)) return 'buy';
-    if (isPipeSellText(text)) return 'sell';
     if (parseItemMarketPurchase(text)) {
       counters.textBuyMatches += 1;
       return 'buy';
@@ -386,7 +550,7 @@ const FlipTrackerProLogImportService = (() => {
 
   function normalizeBuyLog(log, itemLookup) {
     const parsed = parsePipeBuy(log, itemLookup) || parseStructuredBuy(log, itemLookup) || parseItemMarketPurchase(getLogText(log));
-    if (!parsed) return { candidate: null, reason: 'No pipe, structured, or text buy parser matched.', parserKind: '' };
+    if (!parsed) return { candidate: null, reason: 'No pipe, structured, or text buy parser matched.', parserKind: '', partial: buildPartialFromPipe(log, 'buy', itemLookup) };
     const resolved = parsed.itemId || parsed.needsNameReview ? itemLookup.resolve(parsed.itemId, parsed.itemName) : { itemId: parsed.itemId, itemName: parsed.itemName, needsNameReview: false };
     const priced = normalizePriceFields({ ...parsed, ...resolved }, 'unitBuyPrice', 'totalBuyPrice');
     const sellerNote = priced.sellerName ? `Seller: ${priced.sellerName}` : '';
@@ -399,6 +563,7 @@ const FlipTrackerProLogImportService = (() => {
       remainingQuantity: priced.quantity,
       createdAt: fromTimestamp(getLogTimestamp(log)),
       source: 'api',
+      sourceMarket: priced.sourceMarket || 'item market',
       originalLogId: getEntryId(log),
       logTypeId: Number(log.logTypeId) || undefined,
       notes: sellerNote || 'Imported from Torn log',
@@ -410,7 +575,7 @@ const FlipTrackerProLogImportService = (() => {
 
   function normalizeSellLog(log, itemLookup) {
     const parsed = parsePipeSell(log, itemLookup) || parseStructuredSale(log, itemLookup) || parseItemMarketSale(getLogText(log));
-    if (!parsed) return { candidate: null, reason: 'No pipe, structured, or text sell parser matched.', parserKind: '' };
+    if (!parsed) return { candidate: null, reason: 'No pipe, structured, or text sell parser matched.', parserKind: '', partial: buildPartialFromPipe(log, 'sell', itemLookup) };
     const resolved = parsed.itemId || parsed.needsNameReview ? itemLookup.resolve(parsed.itemId, parsed.itemName) : { itemId: parsed.itemId, itemName: parsed.itemName, needsNameReview: false };
     const priced = normalizePriceFields({ ...parsed, ...resolved }, 'unitSellPrice', 'totalSellPrice');
     const buyerNote = priced.buyerName ? `Buyer: ${priced.buyerName}` : '';
@@ -423,6 +588,7 @@ const FlipTrackerProLogImportService = (() => {
       fees: priced.fees,
       soldAt: fromTimestamp(getLogTimestamp(log)),
       source: 'api',
+      sourceMarket: priced.sourceMarket || 'item market',
       originalLogId: getEntryId(log),
       logTypeId: Number(log.logTypeId) || undefined,
       notes: buyerNote || 'Imported from Torn log',
@@ -432,8 +598,33 @@ const FlipTrackerProLogImportService = (() => {
     return validation.ok ? { candidate, reason: '', parserKind: parsed.parserKind || 'unknown' } : { candidate: null, reason: validation.reason, parserKind: parsed.parserKind || 'unknown', partial: candidate };
   }
 
+  function buildPartialFromPipe(log, type, itemLookup) {
+    const parts = extractPipePartsFromLog(log);
+    if (!parts) return {};
+    const itemId = toNumber(parts[3], 0);
+    const resolved = itemLookup.resolve(itemId ? String(itemId) : '');
+    const partial = {
+      itemId: resolved.itemId,
+      itemName: resolved.itemName,
+      needsNameReview: resolved.needsNameReview,
+      quantity: toNumber(parts[4], 0),
+      pipeParts: parts
+    };
+    if (type === 'sell') {
+      partial.unitSellPrice = toNumber(parts[6], 0);
+      partial.totalSellPrice = toNumber(parts[5], 0);
+      partial.fees = toNumber(parts[7], 0) || '';
+    } else {
+      partial.unitBuyPrice = toNumber(parts[6], 0);
+      partial.totalBuyPrice = toNumber(parts[5], 0);
+    }
+    return partial;
+  }
+
   function createReviewCandidate(log, type, reason, partial = {}) {
     const isSell = type === 'sell';
+    const pipeParts = partial.pipeParts || extractPipePartsFromLog(log) || [];
+    const textPreview = getLogText(log) || (pipeParts.length ? pipeParts.join(' | ') : '');
     return {
       entryId: getEntryId(log),
       logTypeId: Number(log.logTypeId) || undefined,
@@ -445,7 +636,8 @@ const FlipTrackerProLogImportService = (() => {
       unitPrice: isSell ? partial.unitSellPrice || '' : partial.unitBuyPrice || '',
       totalPrice: isSell ? partial.totalSellPrice || '' : partial.totalBuyPrice || '',
       fees: partial.fees || '',
-      textPreview: getLogText(log).slice(0, 320),
+      pipeParts,
+      textPreview: textPreview.slice(0, 320),
       rawKeys: Array.isArray(log.rawKeys) ? log.rawKeys.slice(0, 40) : [],
       rawSampleKeys: Array.isArray(log.rawSampleKeys) ? log.rawSampleKeys.slice(0, 40) : [],
       reason: reason || 'Parser could not create a valid import candidate.',
@@ -488,6 +680,15 @@ const FlipTrackerProLogImportService = (() => {
     if (type === 'sell' && parserKind === 'structured') summary.structuredSellMatches += 1;
     if (type === 'buy' && parserKind === 'text') summary.textBuyMatches += 1;
     if (type === 'sell' && parserKind === 'text') summary.textSellMatches += 1;
+  }
+
+  function noteCandidateKind(summary, type, parserKind) {
+    if (type === 'buy' && parserKind === 'pipe') summary.pipeBuyCandidatesCreated += 1;
+    if (type === 'buy' && parserKind === 'structured') summary.structuredBuyCandidatesCreated += 1;
+    if (type === 'buy' && parserKind === 'text') summary.textBuyCandidatesCreated += 1;
+    if (type === 'sell' && parserKind === 'pipe') summary.pipeSellCandidatesCreated += 1;
+    if (type === 'sell' && parserKind === 'structured') summary.structuredSellCandidatesCreated += 1;
+    if (type === 'sell' && parserKind === 'text') summary.textSellCandidatesCreated += 1;
   }
 
   function saveSaleCandidate({ candidate, data, purchaseLots, sales, storageService, accountingService }) {
@@ -542,17 +743,27 @@ const FlipTrackerProLogImportService = (() => {
       sellCandidatesCreated: 0,
       buyIdMatches: 0,
       sellIdMatches: 0,
+      pipeBuyLogsFound: 0,
+      pipeSellLogsFound: 0,
       pipeBuyMatches: 0,
       pipeSellMatches: 0,
       textBuyMatches: 0,
       textSellMatches: 0,
       structuredBuyMatches: 0,
       structuredSellMatches: 0,
+      pipeBuyCandidatesCreated: 0,
+      pipeSellCandidatesCreated: 0,
+      textBuyCandidatesCreated: 0,
+      textSellCandidatesCreated: 0,
+      structuredBuyCandidatesCreated: 0,
+      structuredSellCandidatesCreated: 0,
       parserFailures: 0,
       validationFailures: 0,
       parserFailureReasons: [],
       reviewCandidatesCreated: 0,
       activeReviewItems: 0,
+      firstRecognizedLogs: [],
+      parserSelfTest: [],
       warnings: [],
       errors: [],
       diagnosticMessage: '',
@@ -577,6 +788,23 @@ const FlipTrackerProLogImportService = (() => {
     return { from: current - (7 * 86400), to: current, rangeUsed: 'fallback-7-days' };
   }
 
+  function summarizeRecognizedLogs(logs = []) {
+    const buyIds = new Set(getBuyLogIds());
+    const sellIds = new Set(getSellLogIds());
+    return (Array.isArray(logs) ? logs : [])
+      .filter((log) => buyIds.has(Number(log.logTypeId)) || sellIds.has(Number(log.logTypeId)) || isPipeBuyLog(log) || isPipeSellLog(log) || parseItemMarketPurchase(getLogText(log)) || parseItemMarketSale(getLogText(log)))
+      .slice(0, 5)
+      .map((log) => ({
+        entryId: getEntryId(log),
+        logTypeId: Number(log.logTypeId) || '',
+        title: String(log.title || log.raw && log.raw.title || ''),
+        timestamp: getLogTimestamp(log) || '',
+        textPreview: getLogText(log).slice(0, 240),
+        pipeParts: extractPipePartsFromLog(log) || [],
+        rawKeys: Array.isArray(log.rawKeys) ? log.rawKeys.slice(0, 40) : Array.isArray(log.rawSampleKeys) ? log.rawSampleKeys.slice(0, 40) : []
+      }));
+  }
+
   function buildDebug(result, summary, timings) {
     const serviceDebug = result && result.debug ? result.debug : {};
     return {
@@ -593,6 +821,8 @@ const FlipTrackerProLogImportService = (() => {
       normalizedLogs: summary.normalizedLogs || serviceDebug.normalizedLogs || 0,
       buyIdMatches: summary.buyIdMatches || serviceDebug.buyIdMatches || 0,
       sellIdMatches: summary.sellIdMatches || serviceDebug.sellIdMatches || 0,
+      pipeBuyLogsFound: summary.pipeBuyLogsFound || 0,
+      pipeSellLogsFound: summary.pipeSellLogsFound || 0,
       pipeBuyMatches: summary.pipeBuyMatches || 0,
       pipeSellMatches: summary.pipeSellMatches || 0,
       textBuyMatches: summary.textBuyMatches || 0,
@@ -603,6 +833,12 @@ const FlipTrackerProLogImportService = (() => {
       classifiedSales: summary.classifiedSales || 0,
       buyCandidatesCreated: summary.buyCandidatesCreated || 0,
       sellCandidatesCreated: summary.sellCandidatesCreated || 0,
+      pipeBuyCandidatesCreated: summary.pipeBuyCandidatesCreated || 0,
+      pipeSellCandidatesCreated: summary.pipeSellCandidatesCreated || 0,
+      textBuyCandidatesCreated: summary.textBuyCandidatesCreated || 0,
+      textSellCandidatesCreated: summary.textSellCandidatesCreated || 0,
+      structuredBuyCandidatesCreated: summary.structuredBuyCandidatesCreated || 0,
+      structuredSellCandidatesCreated: summary.structuredSellCandidatesCreated || 0,
       purchasesImported: summary.purchasesImported || 0,
       salesImported: summary.salesImported || 0,
       purchasesSaved: summary.purchasesSaved || 0,
@@ -615,9 +851,10 @@ const FlipTrackerProLogImportService = (() => {
       parserFailures: summary.parserFailures || 0,
       validationFailures: summary.validationFailures || 0,
       parserFailureReasons: summary.parserFailureReasons || [],
+      parserSelfTest: summary.parserSelfTest || [],
       progress: summary.progress,
       firstLogs: (serviceDebug.firstLogs || []).slice(0, 5),
-      firstRecognizedLogs: (serviceDebug.firstRecognizedLogs || serviceDebug.firstLogs || []).slice(0, 5),
+      firstRecognizedLogs: (summary.firstRecognizedLogs && summary.firstRecognizedLogs.length ? summary.firstRecognizedLogs : serviceDebug.firstRecognizedLogs || serviceDebug.firstLogs || []).slice(0, 5),
       firstLogTexts: (serviceDebug.firstLogTexts || []).slice(0, 5),
       sampleRawKeys: serviceDebug.sampleRawKeys || [],
       lastErrorCode: result && result.code ? result.code : serviceDebug.lastErrorCode || '',
@@ -639,6 +876,11 @@ const FlipTrackerProLogImportService = (() => {
     }
     if (result && result.debug && result.debug.normalizerFailed) {
       summary.diagnosticMessage = 'Logs returned but normalizer failed.';
+      return summary;
+    }
+    if (summary.buyIdMatches > 0 && summary.purchasesSaved === 0) {
+      const reason = summary.parserFailureReasons.length ? summary.parserFailureReasons.join(' | ') : 'the parser did not find item, quantity, and price fields in the normalized/raw log data.';
+      summary.diagnosticMessage = `Buy logs were detected but could not be converted into purchases because: ${reason}`;
       return summary;
     }
     if (summary.classifiedPurchases === 0 && summary.classifiedSales === 0) {
@@ -669,6 +911,7 @@ const FlipTrackerProLogImportService = (() => {
     let range = getDateRange(options);
     const summary = createEmptySummary(range.from, range.to);
     summary.rangeUsed = range.rangeUsed;
+    summary.parserSelfTest = runParserSelfTest();
 
     if (!storageService || !tornApiService || typeof tornApiService.fetchUserLogs !== 'function') {
       return { ...summary, ok: false, errors: ['Log import services are unavailable.'] };
@@ -699,6 +942,7 @@ const FlipTrackerProLogImportService = (() => {
     summary.normalizedLogs = logs.length;
     summary.logsReturned = logs.length;
     summary.progress.total = logs.length;
+    summary.firstRecognizedLogs = summarizeRecognizedLogs(logs);
 
     const data = storageService.load(storagePrefix);
     const itemLookup = createItemLookup(data);
@@ -716,6 +960,10 @@ const FlipTrackerProLogImportService = (() => {
     for (let index = 0; index < logs.length; index += 1) {
       const log = logs[index];
       const entryId = getEntryId(log);
+      const pipeParts = extractPipePartsFromLog(log);
+      if (pipeParts && /item\s+market\s+buy/i.test(pipeParts[0])) summary.pipeBuyLogsFound += 1;
+      if (pipeParts && /(item\s+market\s+(sell|sale)|market\s+sell)/i.test(pipeParts[0])) summary.pipeSellLogsFound += 1;
+
       const classifyItemStart = now();
       const type = classifyLog(log, counters);
       classifyMs += elapsed(classifyItemStart);
@@ -748,6 +996,7 @@ const FlipTrackerProLogImportService = (() => {
       noteParserKind(summary, type, parsed.parserKind);
 
       if (parsed.candidate) {
+        noteCandidateKind(summary, type, parsed.parserKind);
         if (type === 'buy') {
           summary.buyCandidatesCreated += 1;
           const lot = storageService.normalizePurchaseLot(parsed.candidate);
@@ -809,9 +1058,10 @@ const FlipTrackerProLogImportService = (() => {
       originalLogId: item.entryId || item.originalLogId || item.id,
       logTypeId: item.logTypeId,
       timestamp: item.timestamp,
-      text: item.textPreview,
-      message: item.textPreview,
-      title: item.textPreview,
+      text: item.textPreview || (Array.isArray(item.pipeParts) ? item.pipeParts.join(' | ') : ''),
+      message: item.textPreview || (Array.isArray(item.pipeParts) ? item.pipeParts.join(' | ') : ''),
+      title: item.textPreview || '',
+      details: Array.isArray(item.pipeParts) ? item.pipeParts.slice(1) : [],
       rawKeys: item.rawKeys || [],
       rawSampleKeys: item.rawSampleKeys || []
     };
@@ -988,6 +1238,7 @@ const FlipTrackerProLogImportService = (() => {
     const accountingService = getAccountingService();
     const summary = createEmptySummary('', '');
     summary.rangeUsed = 'review-retry';
+    summary.parserSelfTest = runParserSelfTest();
     if (!storageService) return { ...summary, ok: false, errors: ['Storage service is unavailable.'] };
     const totalStart = now();
     const data = storageService.load(storagePrefix);
@@ -995,7 +1246,7 @@ const FlipTrackerProLogImportService = (() => {
     const importedLogIds = new Set(Array.isArray(data.importedLogIds) ? data.importedLogIds.map(String) : []);
     let purchaseLots = [...data.purchaseLots];
     let sales = [...data.sales];
-    let reviewQueue = Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map(storageService.normalizeImportReviewItem).filter((item) => !item.ignored) : [];
+    const reviewQueue = Array.isArray(data.importReviewQueue) ? data.importReviewQueue.map(storageService.normalizeImportReviewItem).filter((item) => !item.ignored) : [];
     const nextReviewQueue = [];
 
     for (let index = 0; index < reviewQueue.length; index += 1) {
@@ -1010,6 +1261,7 @@ const FlipTrackerProLogImportService = (() => {
       const parsed = type === 'buy' ? normalizeBuyLog(log, itemLookup) : normalizeSellLog(log, itemLookup);
       noteParserKind(summary, type, parsed.parserKind);
       if (parsed.candidate) {
+        noteCandidateKind(summary, type, parsed.parserKind);
         if (type === 'buy') {
           purchaseLots = [storageService.normalizePurchaseLot(parsed.candidate), ...purchaseLots];
           summary.purchasesImported += 1;
@@ -1030,7 +1282,7 @@ const FlipTrackerProLogImportService = (() => {
         importedLogIds.add(entryId);
       } else {
         addFailureReason(summary, parsed.reason);
-        nextReviewQueue.push(storageService.normalizeImportReviewItem({ ...item, reason: parsed.reason, updatedAt: new Date().toISOString() }));
+        nextReviewQueue.push(storageService.normalizeImportReviewItem({ ...item, ...createReviewCandidate(log, type, parsed.reason, parsed.partial), reason: parsed.reason, updatedAt: new Date().toISOString() }));
       }
       if ((index + 1) % batchSize === 0) await yieldToBrowser();
     }
@@ -1051,14 +1303,56 @@ const FlipTrackerProLogImportService = (() => {
     return summary;
   }
 
-  function runParserSelfTest() {
-    const itemLookup = createItemLookup({});
-    return parserSamples.map((sample) => {
-      const log = { entryId: `sample-${sample.slice(0, 20)}`, logTypeId: isPipeSellText(sample) ? 1226 : 1112, text: sample, message: sample, timestamp: Date.now() / 1000 };
+  function pickCandidateForSelfTest(result, type) {
+    const parsed = result && (result.candidate || result.partial) || {};
+    if (type === 'sell') {
       return {
-        sample,
-        buy: normalizeBuyLog(log, itemLookup),
-        sell: normalizeSellLog(log, itemLookup)
+        itemId: parsed.itemId || '',
+        itemName: parsed.itemName || '',
+        quantity: parsed.quantity || 0,
+        buyerName: parsed.buyerName || '',
+        unitSellPrice: parsed.unitSellPrice || 0,
+        totalSellPrice: parsed.totalSellPrice || 0,
+        fees: parsed.fees || 0
+      };
+    }
+    return {
+      itemId: parsed.itemId || '',
+      itemName: parsed.itemName || '',
+      quantity: parsed.quantity || 0,
+      sellerName: parsed.sellerName || '',
+      unitBuyPrice: parsed.unitBuyPrice || 0,
+      totalBuyPrice: parsed.totalBuyPrice || 0
+    };
+  }
+
+  function matchesExpected(candidate, expected) {
+    return Object.entries(expected).every(([key, value]) => String(candidate[key]) === String(value));
+  }
+
+  function runParserSelfTest() {
+    const itemLookup = createItemLookup({ itemPriceSnapshots: [{ itemId: '1301', itemName: 'CPU', marketPrice: 0, timestamp: new Date().toISOString(), source: 'api' }] });
+    return parserSelfTestCases.map((test) => {
+      const log = {
+        entryId: `sample-${test.name}`,
+        id: `sample-${test.name}`,
+        logTypeId: test.logTypeId,
+        text: test.text,
+        message: test.text,
+        title: test.text.split('|')[0].trim(),
+        timestamp: Date.now() / 1000,
+        raw: test.raw || { title: test.text.split('|')[0].trim(), details: test.text.includes('|') ? test.text.split('|').slice(1).map((part) => part.trim()) : [] },
+        rawKeys: test.raw ? Object.keys(test.raw) : ['title', 'details']
+      };
+      const parsed = test.type === 'sell' ? normalizeSellLog(log, itemLookup) : normalizeBuyLog(log, itemLookup);
+      const candidate = pickCandidateForSelfTest(parsed, test.type);
+      return {
+        name: test.name,
+        type: test.type,
+        passed: Boolean(parsed.candidate && matchesExpected(candidate, test.expected)),
+        expected: test.expected,
+        actual: candidate,
+        reason: parsed.reason || ''
       };
     });
   }
@@ -1066,12 +1360,14 @@ const FlipTrackerProLogImportService = (() => {
   return {
     clearReviewQueue,
     deleteReviewItem,
+    extractPipePartsFromLog,
     ignoreReviewItem,
     importLogs,
     resetImportState,
     retryReviewQueue,
     runParserSelfTest,
-    saveReviewItem
+    saveReviewItem,
+    summarizeRecognizedLogs
   };
 })();
 
