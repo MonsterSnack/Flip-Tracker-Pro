@@ -31,10 +31,13 @@ const FlipTrackerProBackup = (() => {
     return Array.isArray(config.sellLogIds) ? config.sellLogIds : [1226, 1221, 1113, 1104, 4210, 5928, 5511];
   }
 
-  function getStoredSettings(storagePrefix) {
+  function getStoredData(storagePrefix) {
     const storageService = getStorageService();
-    const data = storageService && typeof storageService.load === 'function' ? storageService.load(storagePrefix) : { settings: {} };
-    return data.settings || {};
+    return storageService && typeof storageService.load === 'function' ? storageService.load(storagePrefix) : { settings: {}, importReviewQueue: [] };
+  }
+
+  function getStoredSettings(storagePrefix) {
+    return getStoredData(storagePrefix).settings || {};
   }
 
   function getApiState(storagePrefix) {
@@ -47,6 +50,11 @@ const FlipTrackerProBackup = (() => {
 
   function getLogImportDebug(storagePrefix) {
     return getStoredSettings(storagePrefix).logImportDebug || {};
+  }
+
+  function getReviewQueue(storagePrefix) {
+    const data = getStoredData(storagePrefix);
+    return Array.isArray(data.importReviewQueue) ? data.importReviewQueue : [];
   }
 
   function getLastImportText(storagePrefix) {
@@ -69,8 +77,10 @@ const FlipTrackerProBackup = (() => {
     return `
       <div class="ftp-profit-preview" data-api-diagnostics>
         <span>API diagnostics</span>
-        <small>Status: ${escapeHtml(apiState.connected ? 'API connected' : apiState.hasKey ? 'Key saved, API not connected' : 'Not connected')}</small>
-        <small>Key check: ${escapeHtml(diagnostics.keyInfoWorks ? 'key -> info works' : diagnostics.checkedAt ? 'key -> info did not work' : 'Not checked yet')}</small>
+        <small>Overall API: ${escapeHtml(apiState.connected ? 'API connected' : apiState.hasKey ? 'Key saved, API not connected' : 'Not connected')}</small>
+        <small>Log API: ${escapeHtml(diagnostics.logApiStatus || 'Test with Raw Log Test')}</small>
+        <small>Item price API: ${escapeHtml(diagnostics.itemPriceApiStatus || 'Not checked')}</small>
+        <small>Key diagnostics: ${escapeHtml(diagnostics.keyDiagnosticsStatus || diagnostics.keyInfoWorks ? 'Checked' : 'Not checked yet')}</small>
         <small>Key access level: ${escapeHtml(diagnostics.accessLevel || 'Unknown')}</small>
         <small>Last API error: ${escapeHtml(String(apiState.lastErrorCode || diagnostics.lastErrorCode || 'None'))} ${escapeHtml(apiState.lastError || diagnostics.lastError || 'None')}</small>
       </div>
@@ -87,15 +97,22 @@ const FlipTrackerProBackup = (() => {
       <div class="ftp-profit-preview" data-log-import-summary>
         <span>Import summary</span>
         <small>Purchases ${summary.purchasesImported || 0} / Sales ${summary.salesImported || 0} / Duplicates ${summary.duplicatesSkipped || 0} / Unmatched sales ${summary.unmatchedSales || 0}</small>
+        <small>Needs review ${summary.reviewCandidatesCreated || 0} / Parser failures ${summary.parserFailures || 0} / Validation failures ${summary.validationFailures || 0}</small>
         ${progress}${diagnostic}${warnings}${errors}
       </div>
     `;
   }
 
-  function renderLogImportDebug(debug = {}) {
+  function renderReviewQueue(storagePrefix) {
+    const items = getReviewQueue(storagePrefix).slice(0, 5);
+    if (!items.length) return '<small>Needs review: 0</small>';
+    return `<small>Needs review: ${escapeHtml(getReviewQueue(storagePrefix).length)}</small>${items.map((item) => `<small>${escapeHtml(`${item.type || ''} / ${item.entryId || ''} / ${item.logTypeId || ''} / ${item.reason || ''} / ${item.textPreview || ''}`)}</small>`).join('')}`;
+  }
+
+  function renderLogImportDebug(debug = {}, storagePrefix = '') {
     const params = debug.lastParams && typeof debug.lastParams === 'object' ? JSON.stringify(debug.lastParams) : '{}';
-    const samples = Array.isArray(debug.firstLogs) ? debug.firstLogs.slice(0, 5) : [];
-    const sampleHtml = samples.map((log) => `<small>${escapeHtml(`${log.entryId || ''} / ${log.logTypeId || ''} / ${log.timestamp || ''} / ${log.textPreview || ''}`)}</small>`).join('');
+    const samples = Array.isArray(debug.firstRecognizedLogs) && debug.firstRecognizedLogs.length ? debug.firstRecognizedLogs.slice(0, 5) : Array.isArray(debug.firstLogs) ? debug.firstLogs.slice(0, 5) : [];
+    const sampleHtml = samples.map((log) => `<small>${escapeHtml(`${log.entryId || ''} / ${log.logTypeId || ''} / ${log.timestamp || ''} / ${log.textPreview || ''} / keys: ${(log.rawKeys || []).join(', ')}`)}</small>`).join('');
     const timings = debug.timings || {};
     return `
       <details class="ftp-profit-preview" data-log-import-debug>
@@ -103,12 +120,18 @@ const FlipTrackerProBackup = (() => {
         <small>Strategy: ${escapeHtml(debug.strategyUsed || 'Not requested yet')} / Range: ${escapeHtml(debug.rangeUsed || 'Not requested yet')}</small>
         <small>Endpoint: ${escapeHtml(debug.lastEndpoint || 'Not requested yet')} / Params: ${escapeHtml(params)}</small>
         <small>Raw logs: ${escapeHtml(debug.rawLogsReturned || 0)} / Normalized: ${escapeHtml(debug.normalizedLogs || 0)}</small>
-        <small>Buy ID matches: ${escapeHtml(debug.buyIdMatches || 0)} / Sell ID matches: ${escapeHtml(debug.sellIdMatches || 0)}</small>
+        <small>Recognized buy IDs: ${escapeHtml(debug.buyIdMatches || 0)} / Recognized sell IDs: ${escapeHtml(debug.sellIdMatches || 0)}</small>
         <small>Text buy matches: ${escapeHtml(debug.textBuyMatches || 0)} / Text sell matches: ${escapeHtml(debug.textSellMatches || 0)}</small>
-        <small>Purchases imported: ${escapeHtml(debug.purchasesImported || 0)} / Sales imported: ${escapeHtml(debug.salesImported || 0)} / Duplicates: ${escapeHtml(debug.duplicatesSkipped || 0)} / Unmatched: ${escapeHtml(debug.unmatchedSales || 0)}</small>
+        <small>Classified buys: ${escapeHtml(debug.classifiedPurchases || 0)} / Classified sells: ${escapeHtml(debug.classifiedSales || 0)}</small>
+        <small>Buy candidates: ${escapeHtml(debug.buyCandidatesCreated || 0)} / Sell candidates: ${escapeHtml(debug.sellCandidatesCreated || 0)}</small>
+        <small>Purchases imported: ${escapeHtml(debug.purchasesImported || 0)} / Sales imported: ${escapeHtml(debug.salesImported || 0)}</small>
+        <small>Purchases saved: ${escapeHtml(debug.purchasesSaved || 0)} / Sales saved: ${escapeHtml(debug.salesSaved || 0)}</small>
+        <small>Duplicates: ${escapeHtml(debug.duplicatesSkipped || 0)} / Unmatched: ${escapeHtml(debug.unmatchedSales || 0)}</small>
+        <small>Needs review: ${escapeHtml(debug.reviewCandidatesCreated || 0)} / Parser failures: ${escapeHtml(debug.parserFailures || 0)} / Validation failures: ${escapeHtml(debug.validationFailures || 0)}</small>
         <small>Timings ms: fetch ${escapeHtml(timings.fetchMs || 0)} / normalize ${escapeHtml(timings.normalizeMs || 0)} / classify ${escapeHtml(timings.classifyMs || 0)} / parse ${escapeHtml(timings.parseMs || 0)} / save ${escapeHtml(timings.storageSaveMs || 0)} / total ${escapeHtml(timings.totalImportMs || 0)}</small>
         <small>Sample raw keys: ${escapeHtml((debug.sampleRawKeys || []).join(', ') || 'None')}</small>
         ${sampleHtml || '<small>No sanitized sample logs yet.</small>'}
+        ${storagePrefix ? renderReviewQueue(storagePrefix) : ''}
         <small>${escapeHtml(debug.diagnosticMessage || '')}</small>
       </details>
     `;
@@ -157,12 +180,12 @@ const FlipTrackerProBackup = (() => {
         <div class="ftp-form-actions ftp-backup-actions">
           <button class="ftp-primary-button" type="button" data-import-latest-logs>Import latest logs</button>
           <button class="ftp-secondary-button" type="button" data-import-range-logs>Import date range</button>
-          <button class="ftp-secondary-button" type="button" data-test-raw-log-api>Test raw log API</button>
+          <button class="ftp-secondary-button" type="button" data-test-raw-log-api>Raw Log Test</button>
           <button class="ftp-secondary-button" type="button" data-copy-debug-report>Copy debug report</button>
         </div>
         <p class="ftp-status" data-status="info" data-log-import-status>${escapeHtml(getLastImportText(storagePrefix))}</p>
         ${renderImportSummary(importSummary)}
-        ${renderLogImportDebug(debug)}
+        ${renderLogImportDebug(debug, storagePrefix)}
       </section>
     `;
   }
@@ -180,20 +203,24 @@ const FlipTrackerProBackup = (() => {
       params: debug.lastParams || {},
       rawLogCount: debug.rawLogsReturned || 0,
       normalizedLogCount: debug.normalizedLogs || 0,
-      buyIdMatches: debug.buyIdMatches || 0,
-      sellIdMatches: debug.sellIdMatches || 0,
+      buyIdsDetected: debug.buyIdMatches || 0,
+      sellIdsDetected: debug.sellIdMatches || 0,
       textBuyMatches: debug.textBuyMatches || 0,
       textSellMatches: debug.textSellMatches || 0,
-      purchaseCandidates: debug.classifiedPurchases || 0,
-      saleCandidates: debug.classifiedSales || 0,
-      purchasesImported: debug.purchasesImported || 0,
-      salesImported: debug.salesImported || 0,
+      buyCandidatesCreated: debug.buyCandidatesCreated || 0,
+      sellCandidatesCreated: debug.sellCandidatesCreated || 0,
+      purchasesSaved: debug.purchasesSaved || debug.purchasesImported || 0,
+      salesSaved: debug.salesSaved || debug.salesImported || 0,
       duplicatesSkipped: debug.duplicatesSkipped || 0,
       unmatchedSales: debug.unmatchedSales || 0,
+      reviewCandidates: debug.reviewCandidatesCreated || 0,
+      parserFailures: debug.parserFailures || 0,
+      validationFailures: debug.validationFailures || 0,
       timings: debug.timings || {},
       lastErrorCode: debug.lastErrorCode || '',
       lastError: debug.lastError || '',
-      samples: Array.isArray(debug.firstLogs) ? debug.firstLogs.slice(0, 10) : [],
+      samples: Array.isArray(debug.firstRecognizedLogs) && debug.firstRecognizedLogs.length ? debug.firstRecognizedLogs.slice(0, 10) : Array.isArray(debug.firstLogs) ? debug.firstLogs.slice(0, 10) : [],
+      reviewQueue: getReviewQueue(storagePrefix).slice(0, 10),
       diagnosticMessage: debug.diagnosticMessage || ''
     }, null, 2);
   }
@@ -253,7 +280,7 @@ const FlipTrackerProBackup = (() => {
     function updateLogImportDebug(debug) {
       if (!logImportSection) return;
       const existingDebug = logImportSection.querySelector('[data-log-import-debug]');
-      if (existingDebug) existingDebug.outerHTML = renderLogImportDebug(debug || getLogImportDebug(storagePrefix));
+      if (existingDebug) existingDebug.outerHTML = renderLogImportDebug(debug || getLogImportDebug(storagePrefix), storagePrefix);
     }
 
     function updateLogImportStatus(status, message, summary) {
@@ -273,7 +300,7 @@ const FlipTrackerProBackup = (() => {
 
     function getImportMessage(summary) {
       if (!summary.ok) return (summary.errors || ['Import failed.']).join(' ');
-      return summary.diagnosticMessage || `Imported ${summary.purchasesImported || 0} purchases and ${summary.salesImported || 0} sales. Skipped ${summary.duplicatesSkipped || 0} duplicates. ${summary.unmatchedSales || 0} unmatched sales.`;
+      return summary.diagnosticMessage || `Imported ${summary.purchasesImported || 0} purchases and ${summary.salesImported || 0} sales. Skipped ${summary.duplicatesSkipped || 0} duplicates. ${summary.unmatchedSales || 0} unmatched sales. Needs review ${summary.reviewCandidatesCreated || 0}.`;
     }
 
     async function runLogImport(options = {}) {
@@ -288,6 +315,7 @@ const FlipTrackerProBackup = (() => {
         const message = getImportMessage(summary);
         updateLogImportStatus(ok ? 'success' : 'error', message, summary);
         emitNotice(ok ? 'success' : 'warning', 'Log import finished', message);
+        if (typeof onImport === 'function') onImport();
       } catch (error) {
         updateLogImportStatus('error', error.message || 'Could not import logs.');
         emitNotice('error', 'Log import error', error.message || 'Could not import logs.');
@@ -323,8 +351,8 @@ const FlipTrackerProBackup = (() => {
         updateApiStatus('info', 'Checking API...');
         try {
           const result = await tornApiService.fetchKeyInfo(storagePrefix, { bypassCache: true });
-          const message = result.ok ? 'API checked.' : result.error || 'Could not check API.';
-          updateApiStatus(result.ok ? 'success' : 'error', message);
+          const message = result.ok ? 'API checked.' : result.error || 'Key diagnostics failed, but log import can still be tested.';
+          updateApiStatus(result.ok ? 'success' : 'warning', message);
           updateApiDiagnostics();
           emitNotice(result.ok ? 'success' : 'warning', 'API diagnostics', message);
         } finally {
@@ -349,15 +377,15 @@ const FlipTrackerProBackup = (() => {
         updateApiStatus('info', 'Refreshing item prices...');
         try {
           const result = await tornApiService.fetchItemPrices(storagePrefix, { bypassCache: true });
-          if (!result.ok) throw new Error(result.error || 'Could not refresh item prices.');
+          if (!result.ok) throw new Error(result.error || 'Item price refresh failed.');
           updateApiStatus('success', `Updated ${Array.isArray(result.data) ? result.data.length : 0} item prices.`);
           updateApiDiagnostics();
           emitNotice('success', 'Prices updated', `Updated ${Array.isArray(result.data) ? result.data.length : 0} item prices.`);
           if (typeof onImport === 'function') onImport();
         } catch (error) {
-          updateApiStatus('error', error.message || 'Could not refresh item prices.');
+          updateApiStatus('warning', 'Item price refresh failed.');
           updateApiDiagnostics();
-          emitNotice('error', 'API error', error.message || 'Could not refresh item prices.');
+          emitNotice('warning', 'Item prices', 'Item price refresh failed.');
         } finally {
           refreshPricesButton.disabled = false;
         }
