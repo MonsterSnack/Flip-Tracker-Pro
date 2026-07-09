@@ -3,11 +3,15 @@ const FlipTrackerProStorageService = (() => {
   const validSources = new Set(['manual', 'api', 'future-detected']);
   const defaultSettings = Object.freeze({
     activeRoute: 'dashboard',
+    apiDiagnostics: {},
     apiEnabled: false,
     apiKey: '',
     apiLastError: '',
+    apiLastErrorCode: '',
+    apiLastRequest: {},
     apiStatus: 'disabled',
     bazaarFeeRate: 0.03,
+    logImportDebug: {},
     logImportLastRunAt: '',
     targetRoi: 20
   });
@@ -151,6 +155,9 @@ const FlipTrackerProStorageService = (() => {
       salesImported: Math.max(0, toNumber(entry.salesImported)),
       duplicatesSkipped: Math.max(0, toNumber(entry.duplicatesSkipped)),
       unmatchedSales: Math.max(0, toNumber(entry.unmatchedSales)),
+      logsReturned: Math.max(0, toNumber(entry.logsReturned)),
+      classifiedPurchases: Math.max(0, toNumber(entry.classifiedPurchases)),
+      classifiedSales: Math.max(0, toNumber(entry.classifiedSales)),
       warnings: Array.isArray(entry.warnings) ? entry.warnings.map(String).slice(0, 20) : [],
       errors: Array.isArray(entry.errors) ? entry.errors.map(String).slice(0, 20) : []
     };
@@ -165,11 +172,15 @@ const FlipTrackerProStorageService = (() => {
       ...defaultSettings,
       ...nextSettings,
       activeRoute: String(nextSettings.activeRoute || defaultSettings.activeRoute),
+      apiDiagnostics: nextSettings.apiDiagnostics && typeof nextSettings.apiDiagnostics === 'object' ? nextSettings.apiDiagnostics : {},
       apiEnabled,
       apiKey,
       apiLastError: String(nextSettings.apiLastError || ''),
+      apiLastErrorCode: nextSettings.apiLastErrorCode === undefined ? '' : String(nextSettings.apiLastErrorCode),
+      apiLastRequest: nextSettings.apiLastRequest && typeof nextSettings.apiLastRequest === 'object' ? nextSettings.apiLastRequest : {},
       apiStatus: apiEnabled ? String(nextSettings.apiStatus || 'ready') : 'disabled',
       bazaarFeeRate: toNumber(nextSettings.bazaarFeeRate, defaultSettings.bazaarFeeRate),
+      logImportDebug: nextSettings.logImportDebug && typeof nextSettings.logImportDebug === 'object' ? nextSettings.logImportDebug : {},
       logImportLastRunAt: String(nextSettings.logImportLastRunAt || ''),
       targetRoi: toNumber(nextSettings.targetRoi, defaultSettings.targetRoi)
     };
