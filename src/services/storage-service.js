@@ -1,7 +1,12 @@
 const FlipTrackerProStorageService = (() => {
   const schemaVersion = 1;
+  const validSources = new Set(['manual', 'api', 'future-detected']);
   const defaultSettings = Object.freeze({
     activeRoute: 'dashboard',
+    apiEnabled: false,
+    apiKey: '',
+    apiLastError: '',
+    apiStatus: 'disabled',
     bazaarFeeRate: 0.03,
     targetRoi: 20
   });
@@ -32,63 +37,114 @@ const FlipTrackerProStorageService = (() => {
     return Number.isFinite(numberValue) ? numberValue : fallback;
   }
 
+  function toPositiveQuantity(value, fallback = 1) {
+    return Math.max(1, Math.floor(toNumber(value, fallback)));
+  }
+
+  function toRemainingQuantity(value, quantity) {
+    const remaining = Math.floor(toNumber(value, quantity));
+    return Math.min(quantity, Math.max(0, remaining));
+  }
+
+  function normalizeSource(source) {
+    const value = String(source || 'manual');
+    return validSources.has(value) ? value : 'manual';
+  }
+
   function normalizeSale(rawSale) {
     const sale = rawSale && typeof rawSale === 'object' ? rawSale : {};
-    const quantity = Math.max(1, toNumber(sale.quantity, 1));
-    const buyPrice = toNumber(sale.buyPrice, toNumber(sale.unitCost));
-    const sellPrice = toNumber(sale.sellPrice);
+    const quantity = toPositiveQuantity(sale.quantity, 1);
+    const unitSellPrice = toNumber(sale.unitSellPrice, toNumber(sale.sellPrice));
+    const totalSellPrice = toNumber(sale.totalSellPrice, toNumber(sale.totalSell, unitSellPrice * quantity));
+    const matchedBuyCost = toNumber(sale.matchedBuyCost, toNumber(sale.totalBuy, toNumber(sale.buyPrice) * quantity));
     const fees = toNumber(sale.fees);
-    const totalBuy = toNumber(sale.totalBuy, buyPrice * quantity);
-    const totalSell = toNumber(sale.totalSell, sellPrice * quantity);
-    const profit = toNumber(sale.profit, totalSell - totalBuy - fees);
-    const margin = toNumber(sale.margin, totalBuy > 0 ? (profit / totalBuy) * 100 : 0);
-    const now = new Date().toISOString();
+    const grossProfit = toNumber(sale.grossProfit, totalSellPrice - matchedBuyCost);
+    const netProfit = toNumber(sale.netProfit, toNumber(sale.profit, grossProfit - fees));
+    const roi = toNumber(sale.roi, toNumber(sale.margin, matchedBuyCost > 0 ? (netProfit / matchedBuyCost) * 100 : 0));
+    const soldAt = sale.soldAt || sale.updatedAt || sale.createdAt || new Date().toISOString();
+    const updatedAt = sale.updatedAt || soldAt;
 
     return {
       ...sale,
       id: sale.id || createId(),
+      itemId: sale.itemId || undefined,
       itemName: String(sale.itemName || 'Unnamed item'),
-      buyPrice,
-      sellPrice,
       quantity,
-      fees,
-      totalBuy,
-      totalSell,
-      profit,
-      margin,
+      unitSellPrice,
+      totalSellPrice,
+      matchedBuyCost,
+      grossProfit,
+      netProfit,
+      roi,
+      soldAt,
+      source: normalizeSource(sale.source),
       notes: String(sale.notes || ''),
-      createdAt: sale.createdAt || now,
-      updatedAt: sale.updatedAt || now
+      matchedLots: Array.isArray(sale.matchedLots) ? sale.matchedLots : [],
+      fees,
+      buyPrice: quantity > 0 ? matchedBuyCost / quantity : 0,
+      sellPrice: unitSellPrice,
+      totalBuy: matchedBuyCost,
+      totalSell: totalSellPrice,
+      profit: netProfit,
+      margin: roi,
+      createdAt: sale.createdAt || soldAt,
+      updatedAt
     };
   }
 
   function normalizePurchaseLot(rawLot) {
     const lot = rawLot && typeof rawLot === 'object' ? rawLot : {};
-    const quantity = Math.max(1, toNumber(lot.quantity, 1));
-    const unitCost = toNumber(lot.unitCost, toNumber(lot.buyPrice));
-    const totalCost = toNumber(lot.totalCost, unitCost * quantity);
+    const quantity = toPositiveQuantity(lot.quantity, 1);
+    const unitBuyPrice = toNumber(lot.unitBuyPrice, toNumber(lot.unitCost, toNumber(lot.buyPrice)));
+    const totalBuyPrice = toNumber(lot.totalBuyPrice, toNumber(lot.totalCost, unitBuyPrice * quantity));
     const now = new Date().toISOString();
+    const remainingQuantity = toRemainingQuantity(lot.remainingQuantity, quantity);
 
     return {
+      ...lot,
       id: lot.id || createId(),
+      itemId: lot.itemId || undefined,
       itemName: String(lot.itemName || 'Unnamed item'),
       quantity,
-      unitCost,
-      totalCost,
+      unitBuyPrice,
+      totalBuyPrice,
+      remainingQuantity,
       createdAt: lot.createdAt || now,
       updatedAt: lot.updatedAt || now,
       notes: String(lot.notes || ''),
-      source: String(lot.source || 'manual')
+      source: normalizeSource(lot.source),
+      buyPrice: unitBuyPrice,
+      unitCost: unitBuyPrice,
+      totalCost: totalBuyPrice
+    };
+  }
+
+  function normalizeItemPriceSnapshot(rawSnapshot) {
+    const snapshot = rawSnapshot && typeof rawSnapshot === 'object' ? rawSnapshot : {};
+
+    return {
+      itemId: snapshot.itemId ? String(snapshot.itemId) : '',
+      itemName: String(snapshot.itemName || 'Unnamed item'),
+      marketPrice: toNumber(snapshot.marketPrice),
+      bazaarPrice: snapshot.bazaarPrice === undefined ? undefined : toNumber(snapshot.bazaarPrice),
+      timestamp: snapshot.timestamp || new Date().toISOString(),
+      source: normalizeSource(snapshot.source || 'api')
     };
   }
 
   function normalizeSettings(settings) {
     const nextSettings = settings && typeof settings === 'object' ? settings : {};
+    const apiKey = String(nextSettings.apiKey || '');
+    const apiEnabled = Boolean(nextSettings.apiEnabled && apiKey);
 
     return {
       ...defaultSettings,
       ...nextSettings,
       activeRoute: String(nextSettings.activeRoute || defaultSettings.activeRoute),
+      apiEnabled,
+      apiKey,
+      apiLastError: String(nextSettings.apiLastError || ''),
+      apiStatus: apiEnabled ? String(nextSettings.apiStatus || 'ready') : 'disabled',
       bazaarFeeRate: toNumber(nextSettings.bazaarFeeRate, defaultSettings.bazaarFeeRate),
       targetRoi: toNumber(nextSettings.targetRoi, defaultSettings.targetRoi)
     };
@@ -101,6 +157,7 @@ const FlipTrackerProStorageService = (() => {
       windowState: {},
       purchaseLots: [],
       sales: [],
+      itemPriceSnapshots: [],
       backups: []
     };
   }
@@ -117,6 +174,7 @@ const FlipTrackerProStorageService = (() => {
       windowState: nextData.windowState && typeof nextData.windowState === 'object' ? nextData.windowState : {},
       purchaseLots: Array.isArray(nextData.purchaseLots) ? nextData.purchaseLots.map(normalizePurchaseLot) : [],
       sales: Array.isArray(nextData.sales) ? nextData.sales.map(normalizeSale) : [],
+      itemPriceSnapshots: Array.isArray(nextData.itemPriceSnapshots) ? nextData.itemPriceSnapshots.map(normalizeItemPriceSnapshot) : [],
       backups: Array.isArray(nextData.backups) ? nextData.backups : []
     };
   }
@@ -168,7 +226,7 @@ const FlipTrackerProStorageService = (() => {
       return { ok: false, message: 'Backup data must be an object.' };
     }
 
-    const fields = ['settings', 'windowState', 'purchaseLots', 'sales', 'backups'];
+    const fields = ['settings', 'windowState', 'purchaseLots', 'sales', 'itemPriceSnapshots', 'backups'];
     const hasKnownField = fields.some((field) => Object.prototype.hasOwnProperty.call(data, field));
 
     if (!hasKnownField && !Array.isArray(data.flips)) {
@@ -181,6 +239,10 @@ const FlipTrackerProStorageService = (() => {
 
     if (data.sales && !Array.isArray(data.sales)) {
       return { ok: false, message: 'Sales must be a list.' };
+    }
+
+    if (data.itemPriceSnapshots && !Array.isArray(data.itemPriceSnapshots)) {
+      return { ok: false, message: 'Item price snapshots must be a list.' };
     }
 
     return { ok: true, message: '' };
@@ -218,6 +280,7 @@ const FlipTrackerProStorageService = (() => {
     getStorageKey,
     importJson,
     load,
+    normalizeItemPriceSnapshot,
     normalizePurchaseLot,
     normalizeSale,
     save,
