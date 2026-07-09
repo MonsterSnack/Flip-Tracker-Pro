@@ -47,12 +47,21 @@ const FlipTrackerProBackupDebugPatch = (() => {
   }
 
   function renderRawPreview(storagePrefix) {
+    const debug = getDebug(storagePrefix);
     const samples = getSamples(storagePrefix).slice(0, 3);
+    const structuredSummary = `
+      <span>Structured buy parser</span>
+      <small>Item market buy matches: ${escapeHtml(debug.structuredItemMarketBuyMatches || 0)}</small>
+      <small>Item abroad buy matches: ${escapeHtml(debug.structuredItemAbroadBuyMatches || 0)}</small>
+      <small>Structured buy candidates: ${escapeHtml(debug.structuredBuyCandidatesCreated || 0)} / Purchases saved: ${escapeHtml(debug.structuredBuyPurchasesSaved || debug.purchasesSaved || 0)}</small>
+      <small>Review items active: ${escapeHtml(debug.activeReviewItems || 0)}</small>
+    `;
     if (!samples.length) {
-      return '<div class="ftp-profit-preview" data-raw-recognized-preview><small>No raw recognized log previews yet. Run Raw Log Test or Import latest logs.</small></div>';
+      return `<div class="ftp-profit-preview" data-raw-recognized-preview>${structuredSummary}<small>No raw recognized log previews yet. Run Raw Log Test or Import latest logs.</small></div>`;
     }
     return `
       <div class="ftp-profit-preview" data-raw-recognized-preview>
+        ${structuredSummary}
         <span>Raw recognized log preview</span>
         ${samples.map((log) => `
           <small>${escapeHtml(`${log.entryId || ''} / ${log.logTypeId || ''} / ${log.title || ''}`)}</small>
