@@ -55,7 +55,7 @@ const FlipTrackerProDashboard = (() => {
     `;
   }
 
-  function render({ openSummary, portfolioSummary, statistics, summary } = {}) {
+  function render({ openSummary, portfolioSummary, settings = {}, statistics, summary } = {}) {
     const resolvedSummary = summary || {
       activeFlips: 0,
       successRate: 0,
@@ -82,6 +82,9 @@ const FlipTrackerProDashboard = (() => {
       totalTrades: resolvedSummary.activeFlips,
       weeklyProfit: 0
     };
+    const apiImportWarning = settings.apiEnabled && !settings.logImportLastRunAt
+      ? '<section class="ftp-card"><h2>Import Reminder</h2><p>API connected. Run log import to automatically add purchases and sales.</p></section>'
+      : '';
     const stats = [
       createStat('Lifetime profit', formatMoney(resolvedStatistics.lifetimeProfit)),
       createStat('Today profit', formatMoney(resolvedStatistics.todayProfit)),
@@ -96,6 +99,8 @@ const FlipTrackerProDashboard = (() => {
         <h2>Dashboard</h2>
         <p>Your portfolio, sales, and profit stats update as you add entries.</p>
       </section>
+
+      ${apiImportWarning}
 
       <section class="ftp-stats" aria-label="Trading summary">
         ${stats}
