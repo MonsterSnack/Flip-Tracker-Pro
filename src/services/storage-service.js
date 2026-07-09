@@ -8,6 +8,7 @@ const FlipTrackerProStorageService = (() => {
     apiLastError: '',
     apiStatus: 'disabled',
     bazaarFeeRate: 0.03,
+    logImportLastRunAt: '',
     targetRoi: 20
   });
 
@@ -79,6 +80,11 @@ const FlipTrackerProStorageService = (() => {
       soldAt,
       source: normalizeSource(sale.source),
       notes: String(sale.notes || ''),
+      originalLogId: sale.originalLogId ? String(sale.originalLogId) : undefined,
+      unmatchedSale: Boolean(sale.unmatchedSale),
+      importWarning: sale.importWarning ? String(sale.importWarning) : '',
+      matchedQuantity: Math.max(0, toNumber(sale.matchedQuantity, quantity - toNumber(sale.unmatchedQuantity))),
+      unmatchedQuantity: Math.max(0, toNumber(sale.unmatchedQuantity)),
       matchedLots: Array.isArray(sale.matchedLots) ? sale.matchedLots : [],
       fees,
       buyPrice: quantity > 0 ? matchedBuyCost / quantity : 0,
@@ -113,6 +119,7 @@ const FlipTrackerProStorageService = (() => {
       updatedAt: lot.updatedAt || now,
       notes: String(lot.notes || ''),
       source: normalizeSource(lot.source),
+      originalLogId: lot.originalLogId ? String(lot.originalLogId) : undefined,
       buyPrice: unitBuyPrice,
       unitCost: unitBuyPrice,
       totalCost: totalBuyPrice
@@ -132,6 +139,23 @@ const FlipTrackerProStorageService = (() => {
     };
   }
 
+  function normalizeImportHistoryEntry(rawEntry) {
+    const entry = rawEntry && typeof rawEntry === 'object' ? rawEntry : {};
+
+    return {
+      id: entry.id || createId(),
+      createdAt: entry.createdAt || new Date().toISOString(),
+      from: entry.from || '',
+      to: entry.to || '',
+      purchasesImported: Math.max(0, toNumber(entry.purchasesImported)),
+      salesImported: Math.max(0, toNumber(entry.salesImported)),
+      duplicatesSkipped: Math.max(0, toNumber(entry.duplicatesSkipped)),
+      unmatchedSales: Math.max(0, toNumber(entry.unmatchedSales)),
+      warnings: Array.isArray(entry.warnings) ? entry.warnings.map(String).slice(0, 20) : [],
+      errors: Array.isArray(entry.errors) ? entry.errors.map(String).slice(0, 20) : []
+    };
+  }
+
   function normalizeSettings(settings) {
     const nextSettings = settings && typeof settings === 'object' ? settings : {};
     const apiKey = String(nextSettings.apiKey || '');
@@ -146,6 +170,7 @@ const FlipTrackerProStorageService = (() => {
       apiLastError: String(nextSettings.apiLastError || ''),
       apiStatus: apiEnabled ? String(nextSettings.apiStatus || 'ready') : 'disabled',
       bazaarFeeRate: toNumber(nextSettings.bazaarFeeRate, defaultSettings.bazaarFeeRate),
+      logImportLastRunAt: String(nextSettings.logImportLastRunAt || ''),
       targetRoi: toNumber(nextSettings.targetRoi, defaultSettings.targetRoi)
     };
   }
@@ -158,6 +183,8 @@ const FlipTrackerProStorageService = (() => {
       purchaseLots: [],
       sales: [],
       itemPriceSnapshots: [],
+      importedLogIds: [],
+      importHistory: [],
       backups: []
     };
   }
@@ -175,6 +202,8 @@ const FlipTrackerProStorageService = (() => {
       purchaseLots: Array.isArray(nextData.purchaseLots) ? nextData.purchaseLots.map(normalizePurchaseLot) : [],
       sales: Array.isArray(nextData.sales) ? nextData.sales.map(normalizeSale) : [],
       itemPriceSnapshots: Array.isArray(nextData.itemPriceSnapshots) ? nextData.itemPriceSnapshots.map(normalizeItemPriceSnapshot) : [],
+      importedLogIds: Array.isArray(nextData.importedLogIds) ? [...new Set(nextData.importedLogIds.map(String))] : [],
+      importHistory: Array.isArray(nextData.importHistory) ? nextData.importHistory.map(normalizeImportHistoryEntry).slice(0, 30) : [],
       backups: Array.isArray(nextData.backups) ? nextData.backups : []
     };
   }
@@ -226,7 +255,7 @@ const FlipTrackerProStorageService = (() => {
       return { ok: false, message: 'Backup data must be an object.' };
     }
 
-    const fields = ['settings', 'windowState', 'purchaseLots', 'sales', 'itemPriceSnapshots', 'backups'];
+    const fields = ['settings', 'windowState', 'purchaseLots', 'sales', 'itemPriceSnapshots', 'importedLogIds', 'importHistory', 'backups'];
     const hasKnownField = fields.some((field) => Object.prototype.hasOwnProperty.call(data, field));
 
     if (!hasKnownField && !Array.isArray(data.flips)) {
@@ -243,6 +272,10 @@ const FlipTrackerProStorageService = (() => {
 
     if (data.itemPriceSnapshots && !Array.isArray(data.itemPriceSnapshots)) {
       return { ok: false, message: 'Item price snapshots must be a list.' };
+    }
+
+    if (data.importedLogIds && !Array.isArray(data.importedLogIds)) {
+      return { ok: false, message: 'Imported log IDs must be a list.' };
     }
 
     return { ok: true, message: '' };
@@ -280,6 +313,7 @@ const FlipTrackerProStorageService = (() => {
     getStorageKey,
     importJson,
     load,
+    normalizeImportHistoryEntry,
     normalizeItemPriceSnapshot,
     normalizePurchaseLot,
     normalizeSale,
