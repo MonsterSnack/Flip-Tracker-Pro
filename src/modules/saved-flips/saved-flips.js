@@ -21,6 +21,11 @@ const FlipTrackerProSavedFlips = (() => {
     }).format(value || 0);
   }
 
+  function formatDate(value) {
+    const date = new Date(value || '');
+    return Number.isNaN(date.getTime()) ? 'Unknown date' : date.toLocaleDateString();
+  }
+
   function getSaleProfit(sale) {
     return Number(sale.netProfit ?? sale.profit) || 0;
   }
@@ -29,13 +34,12 @@ const FlipTrackerProSavedFlips = (() => {
     return Number(sale.roi ?? sale.margin) || 0;
   }
 
-  function getUnitSellPrice(sale) {
-    return Number(sale.unitSellPrice ?? sale.sellPrice) || 0;
+  function getMatchedBuyCost(sale) {
+    return Number(sale.matchedBuyCost ?? sale.totalBuy) || 0;
   }
 
-  function getUnitBuyPrice(sale) {
-    const quantity = Number(sale.quantity) || 1;
-    return Number(sale.buyPrice) || ((Number(sale.matchedBuyCost ?? sale.totalBuy) || 0) / quantity);
+  function getTotalSellPrice(sale) {
+    return Number(sale.totalSellPrice ?? sale.totalSell) || ((Number(sale.unitSellPrice ?? sale.sellPrice) || 0) * (Number(sale.quantity) || 1));
   }
 
   function getCreatedTime(sale) {
@@ -106,13 +110,14 @@ const FlipTrackerProSavedFlips = (() => {
     const saleId = escapeHtml(sale.id);
     const itemName = escapeHtml(sale.itemName || 'Unnamed item');
     const notes = escapeHtml(sale.notes || '');
+    const soldDate = formatDate(sale.soldAt || sale.createdAt || sale.updatedAt);
 
     return `
       <li class="ftp-saved-flip" data-flip-id="${saleId}">
         <div class="ftp-saved-flip-main">
           <strong>${itemName}</strong>
-          <span>Buy ${formatMoney(getUnitBuyPrice(sale))} / Sell ${formatMoney(getUnitSellPrice(sale))} / Qty ${sale.quantity || 1}</span>
-          <span>Fees ${formatMoney(sale.fees)} / ROI ${getSaleRoi(sale).toFixed(1)}%</span>
+          <span>Qty ${sale.quantity || 1} / Buy cost ${formatMoney(getMatchedBuyCost(sale))} / Sell total ${formatMoney(getTotalSellPrice(sale))}</span>
+          <span>Net ${formatMoney(profit)} / ROI ${getSaleRoi(sale).toFixed(1)}% / Sold ${escapeHtml(soldDate)}</span>
           ${notes ? `<span>Note: ${notes}</span>` : ''}
         </div>
 
