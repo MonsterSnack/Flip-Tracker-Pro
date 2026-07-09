@@ -2,11 +2,11 @@
 
 A professional standalone Tampermonkey application for Torn flip tracking.
 
-Current version: `0.8.0`
+Current version: `0.8.1`
 
 ## What It Does
 
-Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, and Torn log import groundwork.
+Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, and Torn log import diagnostics.
 
 The installable release is a single readable userscript with no runtime dependency on GitHub, CDNs, external CSS, frameworks, jQuery, or module imports.
 
@@ -75,11 +75,22 @@ torn -> items
 market -> itemmarket
 ```
 
-Required user log IDs:
+Required user log IDs for Custom Key permissions:
 
 ```text
 1225, 1220, 4201, 1112, 4200, 5927, 5510
 ```
+
+These log IDs are key setup requirements. Flip Tracker Pro does not send them as `log=` request filters by default.
+
+## Log Import Diagnostics
+
+Settings includes:
+
+- Import latest logs, which checks the last 24 hours first and then the last 7 days if no logs are returned.
+- Import date range, with same-day ranges treated as the full day.
+- Test raw log API, which calls unfiltered `user -> log` with no date or log ID filters.
+- Copy debug report, which excludes the API key.
 
 ## Release Notes
 
