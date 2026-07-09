@@ -5,6 +5,30 @@ const FlipTrackerProBackup = (() => {
       : String(value ?? '');
   }
 
+  function getConfig() {
+    return window.FlipTrackerProConfig || {};
+  }
+
+  function getRequiredSelections() {
+    const config = getConfig();
+    return Array.isArray(config.requiredApiSelections) ? config.requiredApiSelections : ['key -> info', 'user -> log', 'torn -> items', 'market -> itemmarket'];
+  }
+
+  function getRequiredLogTypeIds() {
+    const config = getConfig();
+    return Array.isArray(config.requiredLogTypeIds) ? config.requiredLogTypeIds : [1225, 1220, 4201, 1112, 4200, 5927, 5510];
+  }
+
+  function getSetupInstructions() {
+    return [
+      'Create a Custom Torn API key named Flip Tracker Pro.',
+      `Required selections: ${getRequiredSelections().join(', ')}.`,
+      `Required user -> log IDs: ${getRequiredLogTypeIds().join(', ')}.`,
+      'For Custom API keys, include user -> log and allow these log IDs. If Torn lets you leave log categories/types empty, that should grant access to all log categories/types.',
+      'Do not use or share your Torn password. Manually copy the generated key from Torn and paste it into Flip Tracker Pro.'
+    ].join('\n');
+  }
+
   function getBackupFileName() {
     const date = new Date().toISOString().slice(0, 10);
     return `flip-tracker-pro-backup-${date}.json`;
@@ -95,8 +119,8 @@ const FlipTrackerProBackup = (() => {
     const lastErrorCode = apiState.lastErrorCode || diagnostics.lastErrorCode || 'None';
     const connectionText = apiState.connected ? 'API connected' : apiState.hasKey ? 'Key saved, API not connected' : 'Not connected';
     const logExplanation = diagnostics.userLog === false
-      ? 'Log import cannot run until the custom key includes user -> log and the needed log categories/types.'
-      : 'Log import needs user -> log plus item market/bazaar/trade log categories if Torn asks for them.';
+      ? 'Log import cannot run until the custom key includes user -> log and required log IDs.'
+      : 'Log import needs user -> log plus the required item buy/sell/trade log IDs.';
 
     return `
       <div class="ftp-profit-preview" data-api-diagnostics>
@@ -108,6 +132,26 @@ const FlipTrackerProBackup = (() => {
         <small>Log import permission: ${escapeHtml(getPermissionText(diagnostics.userLog))}</small>
         <small>Last API error: ${escapeHtml(String(lastErrorCode))} ${escapeHtml(lastError)}</small>
         <small>${escapeHtml(logExplanation)}</small>
+      </div>
+    `;
+  }
+
+  function renderRequiredApiBox() {
+    const selections = getRequiredSelections();
+    const logIds = getRequiredLogTypeIds();
+
+    return `
+      <div class="ftp-profit-preview">
+        <span>Recommended key type: Custom</span>
+        <small>Required API selections: ${escapeHtml(selections.join(', '))}</small>
+        <small>Required user -> log IDs: ${escapeHtml(logIds.join(', '))}</small>
+        <small>For Custom API keys, include user -> log and allow these log IDs. If Torn lets you leave log categories/types empty, that should grant access to all log categories/types.</small>
+        <small>Your key is stored locally in your browser only. Your key is only sent to Torn API endpoints. No Torn password is ever required.</small>
+        <div class="ftp-form-actions ftp-backup-actions">
+          <button class="ftp-secondary-button" type="button" data-copy-api-selections>Copy required selections</button>
+          <button class="ftp-secondary-button" type="button" data-copy-log-ids>Copy required log IDs</button>
+          <button class="ftp-secondary-button" type="button" data-copy-setup-instructions>Copy setup instructions</button>
+        </div>
       </div>
     `;
   }
@@ -138,18 +182,27 @@ const FlipTrackerProBackup = (() => {
     const params = debug.lastParams && typeof debug.lastParams === 'object'
       ? JSON.stringify(debug.lastParams)
       : '{}';
+    const requiredLogIds = Array.isArray(debug.requiredLogTypeIds) && debug.requiredLogTypeIds.length
+      ? debug.requiredLogTypeIds
+      : getRequiredLogTypeIds();
 
     return `
       <details class="ftp-profit-preview" data-log-import-debug>
         <summary>Import debug</summary>
+        <small>Required log IDs: ${escapeHtml(requiredLogIds.join(', '))}</small>
+        <small>Log ID filtering attempted: ${escapeHtml(debug.logIdFilteringAttempted ? 'yes' : 'no')}</small>
+        <small>Strategy used: ${escapeHtml(debug.strategyUsed || 'Not requested yet')}</small>
         <small>Endpoint: ${escapeHtml(debug.lastEndpoint || 'Not requested yet')}</small>
         <small>Selection: ${escapeHtml(debug.lastSelections || 'None')}</small>
         <small>Params: ${escapeHtml(params)}</small>
-        <small>Last error: ${escapeHtml(String(debug.lastErrorCode || 'None'))} ${escapeHtml(debug.lastError || '')}</small>
-        <small>Logs returned: ${escapeHtml(debug.logsReturned || 0)}</small>
-        <small>Classified purchases: ${escapeHtml(debug.classifiedPurchases || 0)}</small>
-        <small>Classified sales: ${escapeHtml(debug.classifiedSales || 0)}</small>
+        <small>Torn error: ${escapeHtml(String(debug.lastErrorCode || 'None'))} ${escapeHtml(debug.lastError || '')}</small>
+        <small>Raw logs returned: ${escapeHtml(debug.rawLogsReturned || 0)}</small>
+        <small>Normalized logs: ${escapeHtml(debug.normalizedLogs || debug.logsReturned || 0)}</small>
+        <small>Purchase candidates: ${escapeHtml(debug.classifiedPurchases || 0)}</small>
+        <small>Sale candidates: ${escapeHtml(debug.classifiedSales || 0)}</small>
         <small>Duplicates skipped: ${escapeHtml(debug.duplicatesSkipped || 0)}</small>
+        <small>Imported purchases: ${escapeHtml(debug.purchasesImported || 0)}</small>
+        <small>Imported sales: ${escapeHtml(debug.salesImported || 0)}</small>
         <small>Unmatched sales: ${escapeHtml(debug.unmatchedSales || 0)}</small>
       </details>
     `;
@@ -164,13 +217,7 @@ const FlipTrackerProBackup = (() => {
       <section class="ftp-card" data-api-settings-section>
         <h2>Torn API</h2>
         <p>Your API key is stored locally in your browser only and is used only to request read-only data from Torn.</p>
-
-        <div class="ftp-profit-preview">
-          <span>Recommended key type: Custom</span>
-          <small>Only select what Flip Tracker Pro needs: key -> info, user -> log, torn -> items, and market -> itemmarket if Torn supports it for your key.</small>
-          <small>For automatic log import, your custom key must include user -> log and the relevant item market/bazaar/trade log categories/types if Torn asks for log categories.</small>
-          <small>Your key is stored locally in your browser only. Your key is only sent to Torn API endpoints. No Torn password is ever required.</small>
-        </div>
+        ${renderRequiredApiBox()}
 
         <label class="ftp-field">
           <span>API enabled</span>
@@ -272,6 +319,19 @@ const FlipTrackerProBackup = (() => {
       if (eventBus && typeof eventBus.emit === 'function') {
         eventBus.emit('notify', { message, title, type });
       }
+    }
+
+    function copyText(text, label) {
+      const value = String(text || '');
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(value)
+          .then(() => emitNotice('success', 'Copied', `${label} copied.`))
+          .catch(() => emitNotice('warning', 'Copy failed', 'Select and copy the text manually.'));
+        return;
+      }
+
+      emitNotice('info', 'Copy manually', value);
     }
 
     function setStatus(status, message) {
@@ -383,14 +443,29 @@ const FlipTrackerProBackup = (() => {
       const checkKeyButton = apiSection.querySelector('[data-check-api-key]');
       const clearKeyButton = apiSection.querySelector('[data-clear-api-key]');
       const refreshPricesButton = apiSection.querySelector('[data-refresh-api-prices]');
+      const copySelectionsButton = apiSection.querySelector('[data-copy-api-selections]');
+      const copyLogIdsButton = apiSection.querySelector('[data-copy-log-ids]');
+      const copySetupButton = apiSection.querySelector('[data-copy-setup-instructions]');
+
+      if (copySelectionsButton) {
+        copySelectionsButton.addEventListener('click', () => copyText(getRequiredSelections().join('\n'), 'Required selections'));
+      }
+
+      if (copyLogIdsButton) {
+        copyLogIdsButton.addEventListener('click', () => copyText(getRequiredLogTypeIds().join(', '), 'Required log IDs'));
+      }
+
+      if (copySetupButton) {
+        copySetupButton.addEventListener('click', () => copyText(getSetupInstructions(), 'Setup instructions'));
+      }
 
       if (getKeyButton) {
         getKeyButton.addEventListener('click', () => {
           const url = tornApiService && typeof tornApiService.getCustomKeyBuilderUrl === 'function'
             ? tornApiService.getCustomKeyBuilderUrl()
-            : 'https://www.torn.com/api.html';
+            : 'https://www.torn.com/preferences.php#tab=api';
           window.open(url, '_blank', 'noopener,noreferrer');
-          emitNotice('info', 'Create custom key', 'On Torn, choose a Custom key with key -> info, user -> log, torn -> items, and market -> itemmarket if available.');
+          emitNotice('info', 'Create custom key', 'On Torn, create a Custom key named Flip Tracker Pro with the required selections and log IDs.');
         });
       }
 
