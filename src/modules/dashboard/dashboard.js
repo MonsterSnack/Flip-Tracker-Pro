@@ -17,6 +17,10 @@ const FlipTrackerProDashboard = (() => {
     return `${(Number(value) || 0).toFixed(1)}%`;
   }
 
+  function getSaleProfit(sale) {
+    return Number(sale.netProfit ?? sale.profit) || 0;
+  }
+
   function createStat(label, value) {
     return `
       <div class="ftp-stat">
@@ -27,10 +31,12 @@ const FlipTrackerProDashboard = (() => {
   }
 
   function createRecentSale(sale) {
+    const profit = getSaleProfit(sale);
+
     return `
       <li class="ftp-flip-row">
         <span>${escapeHtml(sale.itemName || 'Unnamed item')}</span>
-        <strong data-profit-state="${sale.profit >= 0 ? 'positive' : 'negative'}">${formatMoney(sale.profit)}</strong>
+        <strong data-profit-state="${profit >= 0 ? 'positive' : 'negative'}">${formatMoney(profit)}</strong>
       </li>
     `;
   }
@@ -62,6 +68,7 @@ const FlipTrackerProDashboard = (() => {
       totalInvested: 0
     };
     const resolvedPortfolioSummary = portfolioSummary || {
+      currentEstimatedProfit: 0,
       estimatedProfit: 0,
       itemCount: 0,
       openQuantity: resolvedOpenSummary.openQuantity,
@@ -96,7 +103,7 @@ const FlipTrackerProDashboard = (() => {
 
       <section class="ftp-card">
         <h2>This Month</h2>
-        <p>Weekly profit ${formatMoney(resolvedStatistics.weeklyProfit)} / Monthly profit ${formatMoney(resolvedStatistics.monthlyProfit)} / Estimated open profit ${formatMoney(resolvedPortfolioSummary.estimatedProfit)}</p>
+        <p>Weekly profit ${formatMoney(resolvedStatistics.weeklyProfit)} / Monthly profit ${formatMoney(resolvedStatistics.monthlyProfit)} / Estimated open profit ${formatMoney(resolvedPortfolioSummary.estimatedProfit)} / Live estimate ${formatMoney(resolvedPortfolioSummary.currentEstimatedProfit)}</p>
       </section>
     `;
   }
