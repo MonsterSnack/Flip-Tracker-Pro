@@ -1,9 +1,11 @@
 const FlipTrackerProTornApiService = (() => {
   const baseUrl = 'https://api.torn.com';
+  const customKeyBuilderFallbackUrl = 'https://www.torn.com/api.html';
   const maxQueueSize = 8;
   const minDelayMs = 750;
   const cacheTtls = Object.freeze({
     itemPrices: 5 * 60 * 1000,
+    keyInfo: 60 * 1000,
     logs: 30 * 1000,
     status: 30 * 1000,
     default: 60 * 1000
@@ -67,13 +69,21 @@ const FlipTrackerProTornApiService = (() => {
     const enabled = Boolean(settings.apiEnabled && hasKey);
 
     return {
+      connected: enabled && settings.apiStatus !== 'invalid' && settings.apiStatus !== 'error',
+      diagnostics: settings.apiDiagnostics || {},
       enabled,
       hasKey,
       label: enabled ? 'Ready' : hasKey ? 'Saved, disabled' : 'No API key saved',
       lastError: settings.apiLastError || '',
+      lastErrorCode: settings.apiLastErrorCode || '',
+      lastRequest: settings.apiLastRequest || {},
       maskedKey: hasKey ? maskKey(settings.apiKey) : '',
       status: settings.apiStatus || (enabled ? 'ready' : 'disabled')
     };
+  }
+
+  function getCustomKeyBuilderUrl() {
+    return customKeyBuilderFallbackUrl;
   }
 
   function buildUrl({ section = 'torn', id = '', selections = '', params = {} } = {}, apiKey) {
@@ -98,6 +108,26 @@ const FlipTrackerProTornApiService = (() => {
 
     url.searchParams.set('key', apiKey);
     return url;
+  }
+
+  function sanitizeRequest(requestOptions) {
+    return {
+      endpoint: `/${String(requestOptions.section || 'torn').replace(/[^a-z_]/gi, '')}`,
+      id: requestOptions.id ? String(requestOptions.id).replace(/[^a-z0-9_-]/gi, '') : '',
+      selections: String(requestOptions.selections || ''),
+      params: { ...(requestOptions.params || {}) }
+    };
+  }
+
+  function getApiError(payload, response) {
+    const error = payload && payload.error;
+    const code = error && error.code !== undefined ? Number(error.code) : '';
+    const rawMessage = String((error && (error.error || error.message)) || (response ? `Torn API error ${response.status}` : 'Torn API error'));
+    const message = code === 16 || rawMessage.toLowerCase().includes('access level of this key is not high enough')
+      ? 'This key does not have permission for user -> log, or the selected log categories/types do not include item market/bazaar/trade logs.'
+      : rawMessage;
+
+    return { code, message, rawMessage };
   }
 
   function isInvalidKeyError(errorPayload) {
@@ -162,22 +192,24 @@ const FlipTrackerProTornApiService = (() => {
 
   async function request(storagePrefix, requestType, requestOptions) {
     const settings = getSettings(storagePrefix);
+    const sanitizedRequest = sanitizeRequest(requestOptions || {});
 
     if (!settings.apiEnabled || !settings.apiKey) {
-      return { ok: false, error: 'API is disabled or no key is saved.' };
+      return { ok: false, code: '', error: 'API is disabled or no key is saved.', request: sanitizedRequest };
     }
 
-    const cached = getCached(requestType, requestOptions);
+    const bypassCache = Boolean(requestOptions && requestOptions.bypassCache);
+    const cached = bypassCache ? null : getCached(requestType, requestOptions);
 
     if (cached) {
-      return { ok: true, cached: true, data: cached };
+      return { ok: true, cached: true, data: cached, request: sanitizedRequest };
     }
 
     return enqueue(async () => {
       const url = buildUrl(requestOptions, settings.apiKey);
 
       if (url.origin !== baseUrl) {
-        return { ok: false, error: 'Blocked non-Torn API request.' };
+        return { ok: false, code: '', error: 'Blocked non-Torn API request.', request: sanitizedRequest };
       }
 
       try {
@@ -185,27 +217,51 @@ const FlipTrackerProTornApiService = (() => {
         const payload = await response.json();
 
         if (!response.ok || payload.error) {
+          const apiError = getApiError(payload, response);
+
           if (isInvalidKeyError(payload)) {
             updateSettings(storagePrefix, {
               apiEnabled: false,
               apiStatus: 'invalid',
-              apiLastError: 'Invalid API key. API disabled.'
+              apiLastError: 'Invalid API key. API disabled.',
+              apiLastErrorCode: apiError.code,
+              apiLastRequest: sanitizedRequest
             });
             notify('warning', 'Torn API disabled', 'Your API key was rejected by Torn, so API access was disabled.');
+          } else {
+            updateSettings(storagePrefix, {
+              apiStatus: 'error',
+              apiLastError: apiError.message,
+              apiLastErrorCode: apiError.code,
+              apiLastRequest: sanitizedRequest
+            });
           }
 
           return {
             ok: false,
-            error: payload.error ? (payload.error.error || payload.error.message || 'Torn API error') : `Torn API error ${response.status}`
+            code: apiError.code,
+            error: apiError.message,
+            rawError: apiError.rawMessage,
+            request: sanitizedRequest
           };
         }
 
-        updateSettings(storagePrefix, { apiStatus: 'ready', apiLastError: '' });
+        updateSettings(storagePrefix, {
+          apiStatus: 'ready',
+          apiLastError: '',
+          apiLastErrorCode: '',
+          apiLastRequest: sanitizedRequest
+        });
         setCached(requestType, requestOptions, payload);
-        return { ok: true, cached: false, data: payload };
+        return { ok: true, cached: false, data: payload, request: sanitizedRequest };
       } catch (error) {
-        updateSettings(storagePrefix, { apiStatus: 'error', apiLastError: error.message || 'Network error' });
-        return { ok: false, error: error.message || 'Network error' };
+        updateSettings(storagePrefix, {
+          apiStatus: 'error',
+          apiLastError: error.message || 'Network error',
+          apiLastErrorCode: '',
+          apiLastRequest: sanitizedRequest
+        });
+        return { ok: false, code: '', error: error.message || 'Network error', request: sanitizedRequest };
       }
     });
   }
@@ -244,10 +300,65 @@ const FlipTrackerProTornApiService = (() => {
     return [];
   }
 
-  async function fetchItemPrices(storagePrefix) {
+  function getSelectionStrings(payload) {
+    const source = payload && (payload.selections || payload.access || payload.permissions || payload.key && (payload.key.selections || payload.key.access));
+    const values = [];
+
+    function collect(value, prefix = '') {
+      if (!value) {
+        return;
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach((entry) => collect(entry, prefix));
+        return;
+      }
+
+      if (typeof value === 'object') {
+        Object.entries(value).forEach(([key, entry]) => collect(entry, prefix ? `${prefix}.${key}` : key));
+        return;
+      }
+
+      values.push(prefix ? `${prefix}.${String(value)}` : String(value));
+    }
+
+    collect(source);
+    return values.map((value) => value.toLowerCase());
+  }
+
+  function hasSelection(selections, section, selection) {
+    const sectionValue = String(section).toLowerCase();
+    const selectionValue = String(selection).toLowerCase();
+    return selections.some((value) => value.includes(`${sectionValue}.${selectionValue}`) || value.includes(`${sectionValue}:${selectionValue}`) || value === selectionValue || value.endsWith(`.${selectionValue}`));
+  }
+
+  function normalizeKeyInfo(payload) {
+    const keyInfo = payload && (payload.key || payload.info || payload);
+    const selections = getSelectionStrings(payload);
+    const accessLevel = String(
+      keyInfo && (keyInfo.access_level || keyInfo.accessLevel || keyInfo.type || keyInfo.level || keyInfo.access)
+      || payload && (payload.access_level || payload.accessLevel)
+      || 'Unknown'
+    );
+
+    return {
+      checkedAt: new Date().toISOString(),
+      keyInfoWorks: true,
+      accessLevel,
+      selections: selections.slice(0, 60),
+      userLog: selections.length ? hasSelection(selections, 'user', 'log') : 'unknown',
+      itemPrices: selections.length ? (hasSelection(selections, 'torn', 'items') || hasSelection(selections, 'market', 'itemmarket')) : 'unknown',
+      marketItem: selections.length ? hasSelection(selections, 'market', 'itemmarket') : 'unknown',
+      lastErrorCode: '',
+      lastError: ''
+    };
+  }
+
+  async function fetchItemPrices(storagePrefix, { bypassCache = false } = {}) {
     const result = await request(storagePrefix, 'itemPrices', {
       section: 'torn',
-      selections: 'items'
+      selections: 'items',
+      bypassCache
     });
 
     if (!result.ok) {
@@ -267,7 +378,7 @@ const FlipTrackerProTornApiService = (() => {
     return { ...result, data: snapshots };
   }
 
-  async function fetchUserLogs(storagePrefix, { from = '', to = '', category = '' } = {}) {
+  async function fetchUserLogs(storagePrefix, { from = '', to = '', bypassCache = true } = {}) {
     const params = {};
 
     if (from) {
@@ -278,21 +389,78 @@ const FlipTrackerProTornApiService = (() => {
       params.to = to;
     }
 
-    if (category) {
-      params.cat = category;
-    }
-
     const result = await request(storagePrefix, 'logs', {
       section: 'user',
       selections: 'log',
-      params
+      params,
+      bypassCache
     });
 
     if (!result.ok) {
+      updateSettings(storagePrefix, {
+        logImportDebug: {
+          lastEndpoint: result.request && result.request.endpoint,
+          lastSelections: result.request && result.request.selections,
+          lastParams: result.request && result.request.params,
+          lastErrorCode: result.code || '',
+          lastError: result.error || '',
+          logsReturned: 0,
+          classifiedPurchases: 0,
+          classifiedSales: 0,
+          duplicatesSkipped: 0,
+          unmatchedSales: 0,
+          updatedAt: new Date().toISOString()
+        }
+      });
       return result;
     }
 
-    return { ...result, data: normalizeLogs(result.data) };
+    const logs = normalizeLogs(result.data);
+    updateSettings(storagePrefix, {
+      logImportDebug: {
+        lastEndpoint: result.request && result.request.endpoint,
+        lastSelections: result.request && result.request.selections,
+        lastParams: result.request && result.request.params,
+        lastErrorCode: '',
+        lastError: '',
+        logsReturned: logs.length,
+        classifiedPurchases: 0,
+        classifiedSales: 0,
+        duplicatesSkipped: 0,
+        unmatchedSales: 0,
+        updatedAt: new Date().toISOString()
+      }
+    });
+
+    return { ...result, data: logs };
+  }
+
+  async function fetchKeyInfo(storagePrefix, { bypassCache = true } = {}) {
+    const result = await request(storagePrefix, 'keyInfo', {
+      section: 'key',
+      selections: 'info',
+      bypassCache
+    });
+
+    if (!result.ok) {
+      const diagnostics = {
+        checkedAt: new Date().toISOString(),
+        keyInfoWorks: false,
+        accessLevel: 'Unknown',
+        selections: [],
+        userLog: false,
+        itemPrices: false,
+        marketItem: false,
+        lastErrorCode: result.code || '',
+        lastError: result.error || 'Could not check key permissions.'
+      };
+      updateSettings(storagePrefix, { apiDiagnostics: diagnostics });
+      return { ...result, diagnostics };
+    }
+
+    const diagnostics = normalizeKeyInfo(result.data);
+    updateSettings(storagePrefix, { apiDiagnostics: diagnostics });
+    return { ...result, diagnostics };
   }
 
   function saveApiKey(storagePrefix, apiKey) {
@@ -303,7 +471,8 @@ const FlipTrackerProTornApiService = (() => {
         apiEnabled: false,
         apiKey: '',
         apiStatus: 'missing-key',
-        apiLastError: 'Enter an API key before enabling Torn API.'
+        apiLastError: 'Enter an API key before enabling Torn API.',
+        apiLastErrorCode: ''
       });
       return {
         ok: false,
@@ -318,7 +487,9 @@ const FlipTrackerProTornApiService = (() => {
       apiEnabled: true,
       apiKey: key,
       apiStatus: 'saved',
-      apiLastError: ''
+      apiLastError: '',
+      apiLastErrorCode: '',
+      apiDiagnostics: {}
     });
 
     return {
@@ -335,7 +506,9 @@ const FlipTrackerProTornApiService = (() => {
       apiEnabled: false,
       apiKey: '',
       apiStatus: 'disabled',
-      apiLastError: ''
+      apiLastError: '',
+      apiLastErrorCode: '',
+      apiDiagnostics: {}
     });
     cache.clear();
 
@@ -356,7 +529,8 @@ const FlipTrackerProTornApiService = (() => {
       updateSettings(storagePrefix, {
         apiEnabled: false,
         apiStatus: 'missing-key',
-        apiLastError: 'Save an API key before enabling Torn API.'
+        apiLastError: 'Save an API key before enabling Torn API.',
+        apiLastErrorCode: ''
       });
       return {
         ok: false,
@@ -369,7 +543,8 @@ const FlipTrackerProTornApiService = (() => {
     updateSettings(storagePrefix, {
       apiEnabled: Boolean(enabled),
       apiStatus: enabled ? 'ready' : 'disabled',
-      apiLastError: ''
+      apiLastError: '',
+      apiLastErrorCode: ''
     });
 
     return {
@@ -383,7 +558,9 @@ const FlipTrackerProTornApiService = (() => {
   return {
     clearApiKey,
     fetchItemPrices,
+    fetchKeyInfo,
     fetchUserLogs,
+    getCustomKeyBuilderUrl,
     getStatus,
     maskKey,
     request,
