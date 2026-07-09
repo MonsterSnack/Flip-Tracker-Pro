@@ -179,9 +179,7 @@ const FlipTrackerProLogImportDebugService = (() => {
       originalLogId: getEntryId(log),
       logTypeId: Number(log.logTypeId || getRaw(log).log) || undefined,
       createdAt: timestampToIso(getLogTimestamp(log)),
-      notes: hasValue(data.seller) && Number(data.seller) > 0
-        ? `Seller ID: ${data.seller}${data.anonymous ? ' (anonymous)' : ''}`
-        : data.anonymous ? 'Seller anonymous' : '',
+      notes: data.seller ? `Seller ID: ${data.seller}${data.anonymous ? ' (anonymous)' : ''}` : '',
       parserKind: 'structured-item-market-buy'
     };
   }
