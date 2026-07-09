@@ -16,9 +16,16 @@ const FlipTrackerProPurchaseLotService = (() => {
     return [...data.purchaseLots].sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
   }
 
+  function listOpen(storagePrefix) {
+    return list(storagePrefix).filter((lot) => (Number(lot.remainingQuantity) || 0) > 0);
+  }
+
   function create(storagePrefix, lot) {
     const storageService = getStorageService();
-    const nextLot = normalizeLot(lot || {});
+    const nextLot = normalizeLot({
+      ...(lot || {}),
+      remainingQuantity: lot && lot.remainingQuantity !== undefined ? lot.remainingQuantity : lot && lot.quantity
+    });
 
     if (!storageService) {
       return nextLot;
@@ -86,6 +93,7 @@ const FlipTrackerProPurchaseLotService = (() => {
     delete: remove,
     find,
     list,
+    listOpen,
     remove,
     update
   };
