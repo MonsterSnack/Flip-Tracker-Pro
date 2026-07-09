@@ -17,15 +17,23 @@ const FlipTrackerProAnalytics = (() => {
     return `${(Number(value) || 0).toFixed(1)}%`;
   }
 
+  function getSaleProfit(sale) {
+    return Number(sale.netProfit ?? sale.profit) || 0;
+  }
+
+  function getSaleRoi(sale) {
+    return Number(sale.roi ?? sale.margin) || 0;
+  }
+
   function getDateKey(sale) {
-    const date = new Date(sale.updatedAt || sale.createdAt || Date.now());
+    const date = new Date(sale.soldAt || sale.updatedAt || sale.createdAt || Date.now());
     return Number.isNaN(date.getTime()) ? 'Unknown' : date.toISOString().slice(0, 10);
   }
 
   function groupProfitByDay(sales) {
     const grouped = sales.reduce((totals, sale) => {
       const dateKey = getDateKey(sale);
-      totals[dateKey] = (totals[dateKey] || 0) + (Number(sale.profit) || 0);
+      totals[dateKey] = (totals[dateKey] || 0) + getSaleProfit(sale);
       return totals;
     }, {});
 
@@ -43,7 +51,7 @@ const FlipTrackerProAnalytics = (() => {
         totals[itemName] = 0;
       }
 
-      totals[itemName] += Number(sale.profit) || 0;
+      totals[itemName] += getSaleProfit(sale);
       return totals;
     }, {});
 
@@ -58,7 +66,7 @@ const FlipTrackerProAnalytics = (() => {
       return 0;
     }
 
-    return sales.reduce((total, sale) => total + (Number(sale.profit) || 0), 0) / sales.length;
+    return sales.reduce((total, sale) => total + getSaleProfit(sale), 0) / sales.length;
   }
 
   function getAverageMargin(sales) {
@@ -66,7 +74,7 @@ const FlipTrackerProAnalytics = (() => {
       return 0;
     }
 
-    return sales.reduce((total, sale) => total + (Number(sale.margin) || 0), 0) / sales.length;
+    return sales.reduce((total, sale) => total + getSaleRoi(sale), 0) / sales.length;
   }
 
   function renderStat(label, value) {
@@ -122,10 +130,10 @@ const FlipTrackerProAnalytics = (() => {
     const bestItem = groupProfitByItem(sales)[0] || null;
     const stats = [
       renderStat('Average profit', formatMoney(getAverageProfit(sales))),
-      renderStat('Average margin', formatPercent(getAverageMargin(sales))),
-      renderStat('Average ROI', formatPercent(statistics ? statistics.averageROI : 0)),
-      renderStat('Best flip', bestFlip ? `${bestFlip.itemName || 'Unnamed'} ${formatMoney(bestFlip.profit)}` : '$0'),
-      renderStat('Worst flip', worstFlip ? `${worstFlip.itemName || 'Unnamed'} ${formatMoney(worstFlip.profit)}` : '$0'),
+      renderStat('Average ROI', formatPercent(getAverageMargin(sales))),
+      renderStat('Overall ROI', formatPercent(statistics ? statistics.averageROI : 0)),
+      renderStat('Best flip', bestFlip ? `${bestFlip.itemName || 'Unnamed'} ${formatMoney(getSaleProfit(bestFlip))}` : '$0'),
+      renderStat('Worst flip', worstFlip ? `${worstFlip.itemName || 'Unnamed'} ${formatMoney(getSaleProfit(worstFlip))}` : '$0'),
       renderStat('Best item', bestItem ? `${bestItem.label} ${formatMoney(bestItem.value)}` : '$0')
     ].join('');
 
