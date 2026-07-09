@@ -227,16 +227,27 @@ const FlipTrackerProLogImportService = (() => {
             ? accountingService.recordSale({ purchaseLots, sale: saleDraft, settings: data.settings })
             : { purchaseLots, saleRecord: saleDraft };
           const unmatchedQuantity = Number(accountingResult.saleRecord.unmatchedQuantity) || 0;
+          const matchedQuantity = Number(accountingResult.saleRecord.matchedQuantity) || 0;
+          const fullyUnmatched = unmatchedQuantity > 0 && matchedQuantity === 0;
           const warning = unmatchedQuantity > 0
             ? `${saleDraft.itemName}: ${unmatchedQuantity} sold item(s) could not be matched to open purchases.`
             : '';
-          const sale = storageService.normalizeSale({
+          const saleRecord = {
             ...accountingResult.saleRecord,
             originalLogId: logId,
             unmatchedSale: unmatchedQuantity > 0,
             importWarning: warning,
             notes: warning || accountingResult.saleRecord.notes || 'Imported from Torn log'
-          });
+          };
+
+          if (fullyUnmatched) {
+            saleRecord.matchedBuyCost = 0;
+            saleRecord.grossProfit = 0;
+            saleRecord.netProfit = 0;
+            saleRecord.roi = 0;
+          }
+
+          const sale = storageService.normalizeSale(saleRecord);
 
           purchaseLots = accountingResult.purchaseLots;
           sales = [sale, ...sales];
