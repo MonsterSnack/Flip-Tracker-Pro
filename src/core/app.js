@@ -1,30 +1,30 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.7.2
+// @version      0.7.3
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/log-import-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.2
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/log-import-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.3
 // @grant        none
 // ==/UserScript==
 
@@ -34,7 +34,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FT',
-    version: '0.7.2',
+    version: '0.7.3',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: { width: 760, height: 560, top: 96, right: 24 }
