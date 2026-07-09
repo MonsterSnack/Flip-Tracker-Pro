@@ -15,9 +15,13 @@ const FlipTrackerProFlipStore = (() => {
     return window.FlipTrackerProStatisticsService;
   }
 
+  function getAccountingService() {
+    return window.FlipTrackerProTradeAccountingService;
+  }
+
   function getData(storagePrefix) {
     const storageService = getStorageService();
-    return storageService ? storageService.load(storagePrefix) : { purchaseLots: [], sales: [], settings: {} };
+    return storageService ? storageService.load(storagePrefix) : { purchaseLots: [], sales: [], settings: {}, itemPriceSnapshots: [] };
   }
 
   function normalizeSale(sale) {
@@ -35,7 +39,9 @@ const FlipTrackerProFlipStore = (() => {
 
     return {
       ...normalizedLot,
-      buyPrice: normalizedLot.unitCost
+      buyPrice: normalizedLot.unitBuyPrice ?? normalizedLot.unitCost,
+      unitCost: normalizedLot.unitBuyPrice ?? normalizedLot.unitCost,
+      totalCost: normalizedLot.totalBuyPrice ?? normalizedLot.totalCost
     };
   }
 
@@ -79,13 +85,31 @@ const FlipTrackerProFlipStore = (() => {
 
   function add(storagePrefix, sale) {
     const storageService = getStorageService();
-    const nextSale = normalizeSale(sale || {});
+    const accountingService = getAccountingService();
+    let nextSale = normalizeSale(sale || {});
 
     if (storageService) {
-      storageService.update(storagePrefix, (data) => ({
-        ...data,
-        sales: [nextSale, ...data.sales]
-      }));
+      storageService.update(storagePrefix, (data) => {
+        if (accountingService && typeof accountingService.recordSale === 'function') {
+          const result = accountingService.recordSale({
+            purchaseLots: data.purchaseLots,
+            sale,
+            settings: data.settings
+          });
+          nextSale = normalizeSale(result.saleRecord);
+
+          return {
+            ...data,
+            purchaseLots: result.purchaseLots,
+            sales: [nextSale, ...data.sales]
+          };
+        }
+
+        return {
+          ...data,
+          sales: [nextSale, ...data.sales]
+        };
+      });
     }
 
     return nextSale;
@@ -167,7 +191,7 @@ const FlipTrackerProFlipStore = (() => {
     const portfolioService = getPortfolioService();
     const data = getData(storagePrefix);
     const portfolio = portfolioService && typeof portfolioService.calculate === 'function'
-      ? portfolioService.calculate(data.purchaseLots, data.settings)
+      ? portfolioService.calculate(data.purchaseLots, data.settings, data.itemPriceSnapshots)
       : [];
     const summary = portfolioService && typeof portfolioService.summarize === 'function'
       ? portfolioService.summarize(portfolio)
@@ -190,7 +214,7 @@ const FlipTrackerProFlipStore = (() => {
 
     return {
       activeFlips: statistics.totalTrades,
-      successRate: resolvedSales.length > 0 ? (resolvedSales.filter((sale) => (Number(sale.profit) || 0) >= 0).length / resolvedSales.length) * 100 : 0,
+      successRate: resolvedSales.length > 0 ? (resolvedSales.filter((sale) => (Number(sale.netProfit ?? sale.profit) || 0) >= 0).length / resolvedSales.length) * 100 : 0,
       totalProfit: statistics.lifetimeProfit,
       totalQuantity: resolvedSales.reduce((total, sale) => total + (Number(sale.quantity) || 0), 0)
     };
