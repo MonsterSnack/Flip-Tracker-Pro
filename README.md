@@ -2,11 +2,11 @@
 
 A professional standalone Tampermonkey application for Torn flip tracking.
 
-Current version: `0.8.3`
+Current version: `0.8.4`
 
 ## What It Does
 
-Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, Torn log import diagnostics, and an import review queue for recognized logs that need manual review.
+Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, Torn log import diagnostics, pipe-format Torn log parsing, and an actionable import review queue.
 
 The installable release is a single readable userscript with no runtime dependency on GitHub, CDNs, external CSS, frameworks, jQuery, or module imports.
 
@@ -78,7 +78,7 @@ Sell log IDs:
 1226, 1221, 1113, 1104, 4210, 5928, 5511
 ```
 
-Version 0.8.3 classifies logs by Torn log type ID first, then falls back to text parsing for known buy/sell wording. Recognized buy/sell logs are never silently dropped: each one becomes an import, a duplicate skip, or a Needs review item.
+Version 0.8.4 classifies logs by Torn log type ID first, then supports API pipe-format rows such as `Item market buy | ... | itemId | quantity | total | unit | ...`, plus text parsing for known buy/sell wording. Parseable buys are saved as PurchaseLots even when the item name is not cached yet; those fall back to `Item #id` and are marked for name review.
 
 ## Log Import Diagnostics
 
@@ -88,9 +88,11 @@ Settings includes:
 - Import date range, with same-day ranges treated as the full day.
 - Raw Log Test, which calls unfiltered `user -> log` with no date or log ID filters.
 - Copy debug report, which excludes the API key.
-- Needs review diagnostics for recognized logs that could not be parsed.
+- Needs Review, with editable fields and Save as Purchase, Save as Sale, Ignore, and Delete controls.
+- Retry Needs Review Parsing for old review items after parser updates.
+- Reset import state, which clears only imported log IDs, review queue, import history, and import debug.
 
-The debug report includes raw and normalized counts, buy/sell ID matches, text matches, candidate counts, saved counts, duplicate skips, unmatched sales, review candidates, parser failures, validation failures, first sanitized log samples, and timing details.
+The debug report includes raw and normalized counts, buy/sell ID matches, pipe/text/structured matches, candidate counts, saved counts, duplicate skips, ignored items, unmatched sales, review candidates, parser failures, validation failures, first sanitized log samples, and timing details.
 
 ## Release Notes
 
