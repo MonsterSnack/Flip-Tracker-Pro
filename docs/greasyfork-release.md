@@ -1,6 +1,6 @@
 # GreasyFork Release
 
-Flip Tracker Pro 0.8.2 ships as a standalone Tampermonkey/Greasemonkey userscript.
+Flip Tracker Pro 0.8.3 ships as a standalone Tampermonkey/Greasemonkey userscript.
 
 ## Build
 
@@ -29,8 +29,9 @@ The build script uses only Node's built-in `fs` and `path` modules. It does not 
 7. Click `FT` and confirm the app expands.
 8. Check that the window can be dragged and resized.
 9. Add an open purchase, record a sale, and confirm portfolio/history/statistics update.
-10. Open Settings and confirm backup, API key settings, item price refresh, raw log test, debug report copy, and log import controls render.
-11. Run `Test raw log API` and confirm raw logs, normalized logs, buy ID matches, and sell ID matches appear in the debug panel.
+10. Open Settings and confirm backup, API key settings, item price refresh, Raw Log Test, debug report copy, and log import controls render.
+11. Run `Raw Log Test` and confirm raw logs, normalized logs, buy ID matches, sell ID matches, recognized samples, and timings appear in the debug panel.
+12. Run `Import latest logs`; if buy IDs are detected but purchases are not saved, confirm the Needs review count explains why.
 
 ## GreasyFork Notes
 
@@ -66,12 +67,13 @@ Sell log IDs:
 1226, 1221, 1113, 1104, 4210, 5928, 5511
 ```
 
-Version 0.8.2 classifies by Torn log type ID first. Text parsing remains as a fallback for visible Torn log wording such as item market buys and sells.
+Version 0.8.3 classifies by Torn log type ID first. Text parsing remains as a fallback for visible Torn log wording such as item market buys and sells. Recognized buy/sell logs become imports, duplicate skips, or Needs review items.
 
 ## Log Import Diagnostics
 
-- `Test raw log API` calls unfiltered `user -> log` with no date filter and no log ID filter.
+- `Raw Log Test` calls unfiltered `user -> log` with no date filter and no log ID filter.
 - `Import latest logs` checks the last 24 hours first, then the last 7 days only if no logs are returned.
 - If raw logs exist but none classify, the UI reports that the parser/classifier did not match.
+- If recognized log IDs exist but imports are zero, the UI shows duplicates, parser failures, validation failures, and Needs review items.
 - Date ranges that start and end on the same day include the full day, ending at 23:59:59.
-- `Copy debug report` excludes the API key and includes sanitized endpoint, params, raw and normalized counts, buy/sell ID matches, text matches, imported counts, duplicate skips, unmatched sales, first sanitized log samples, and timing details.
+- `Copy debug report` excludes the API key and includes sanitized endpoint, params, raw and normalized counts, buy/sell ID matches, text matches, candidate counts, saved counts, duplicate skips, unmatched sales, review candidates, parser failures, validation failures, first sanitized samples, and timing details.
