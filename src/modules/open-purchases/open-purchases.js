@@ -36,6 +36,20 @@ const FlipTrackerProOpenPurchases = (() => {
     return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
   }
 
+  function getItemOptions(priceSnapshots = []) {
+    const byName = new Map();
+
+    priceSnapshots.forEach((item) => {
+      const itemName = String(item.itemName || '').trim();
+
+      if (itemName) {
+        byName.set(itemName.toLowerCase(), { itemId: item.itemId || '', itemName });
+      }
+    });
+
+    return [...byName.values()].sort((left, right) => left.itemName.localeCompare(right.itemName));
+  }
+
   function normalizePurchaseLot(purchaseLot) {
     const unitBuyPrice = Number(purchaseLot.unitBuyPrice ?? purchaseLot.unitCost ?? purchaseLot.buyPrice) || 0;
     const quantity = Number(purchaseLot.quantity) || 1;
@@ -205,6 +219,7 @@ const FlipTrackerProOpenPurchases = (() => {
   function render({ purchaseLots, purchases = purchaseLots || [], selectedPurchaseId = '', priceSnapshots = [] } = {}) {
     const lots = purchases.map(normalizePurchaseLot).filter((purchase) => (Number(purchase.remainingQuantity) || 0) > 0);
     const snapshotMap = createSnapshotMap(priceSnapshots);
+    const itemOptions = getItemOptions(priceSnapshots);
     const selectedPurchase = lots.find((purchase) => purchase.id === selectedPurchaseId) || null;
     const listHtml = lots.length > 0
       ? `<ul class="ftp-saved-flips">${lots.map((purchase) => renderPurchase(purchase, snapshotMap)).join('')}</ul>`
@@ -216,9 +231,13 @@ const FlipTrackerProOpenPurchases = (() => {
         <p>Track items you bought but have not sold yet.</p>
 
         <form class="ftp-form" data-open-purchase-form>
+          <input name="itemId" type="hidden">
           <label class="ftp-field">
             <span>Item</span>
-            <input class="ftp-input" name="itemName" type="text" placeholder="Item name" autocomplete="off" required>
+            <input class="ftp-input" name="itemName" type="text" list="ftp-purchase-item-options" placeholder="Search item name" autocomplete="off" required>
+            <datalist id="ftp-purchase-item-options">
+              ${itemOptions.map((item) => `<option value="${escapeHtml(item.itemName)}"></option>`).join('')}
+            </datalist>
           </label>
 
           <div class="ftp-form-grid">
@@ -252,9 +271,19 @@ const FlipTrackerProOpenPurchases = (() => {
   function bind(root, { onChange, storagePrefix, store, priceSnapshots = [] } = {}) {
     const section = root.querySelector('[data-open-purchases-section]');
     const purchaseLotService = getPurchaseLotService();
+    const itemOptions = getItemOptions(priceSnapshots);
+    const optionsByName = itemOptions.reduce((items, item) => {
+      items[item.itemName.toLowerCase()] = item;
+      return items;
+    }, {});
 
     if (!section) {
       return;
+    }
+
+    function syncSelectedItem(form) {
+      const selectedItem = optionsByName[String(form.elements.itemName.value || '').toLowerCase()];
+      form.elements.itemId.value = selectedItem ? selectedItem.itemId : '';
     }
 
     function getPurchaseLots() {
@@ -305,6 +334,7 @@ const FlipTrackerProOpenPurchases = (() => {
     const sellForm = section.querySelector('[data-open-purchase-sell-form]');
 
     if (addForm) {
+      addForm.addEventListener('input', () => syncSelectedItem(addForm));
       addForm.addEventListener('submit', (event) => {
         event.preventDefault();
 
@@ -312,9 +342,11 @@ const FlipTrackerProOpenPurchases = (() => {
           return;
         }
 
+        syncSelectedItem(addForm);
         const quantity = parseQuantity(addForm.elements.quantity.value);
         const unitBuyPrice = parseMoney(addForm.elements.buyPrice.value);
         const purchaseLot = {
+          itemId: addForm.elements.itemId.value || undefined,
           itemName: addForm.elements.itemName.value.trim(),
           notes: addForm.elements.notes.value.trim(),
           quantity,
