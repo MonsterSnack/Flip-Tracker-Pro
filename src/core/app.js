@@ -1,29 +1,30 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.7.1
+// @version      0.7.2
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.1
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/log-import-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.2
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.2
 // @grant        none
 // ==/UserScript==
 
@@ -33,7 +34,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FT',
-    version: '0.7.1',
+    version: '0.7.2',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: { width: 760, height: 560, top: 96, right: 24 }
@@ -76,14 +77,14 @@
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-title-button { width: 100%; height: 100%; justify-content: center; font-size: 15px; }
     #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-version, #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-window-actions, #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-body, #${config.rootId} .ftp-window[data-display-mode="compact"] .ftp-resize-handle, #${config.rootId} .ftp-window[data-window-state="minimized"] .ftp-body, #${config.rootId} .ftp-window[data-window-state="closed"] { display: none; }
     #${config.rootId} .ftp-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid #313744; background: #181b22; cursor: grab; touch-action: none; user-select: none; }
-    #${config.rootId} .ftp-title-group, #${config.rootId} .ftp-body, #${config.rootId} .ftp-sidebar, #${config.rootId} .ftp-main-content, #${config.rootId} .ftp-stats, #${config.rootId} .ftp-flip-list, #${config.rootId} .ftp-saved-flips, #${config.rootId} .ftp-saved-flip-main, #${config.rootId} .ftp-saved-flip-side, #${config.rootId} .ftp-form, #${config.rootId} .ftp-form-grid, #${config.rootId} .ftp-form-actions, #${config.rootId} .ftp-field, #${config.rootId} .ftp-profit-preview { display: grid; }
-    #${config.rootId} .ftp-title-button { display: flex; align-items: center; width: fit-content; border: 0; background: transparent; color: #f4f6fb; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0; }
+    #${config.rootId} .ftp-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+    #${config.rootId} .ftp-sidebar, #${config.rootId} .ftp-main-content, #${config.rootId} .ftp-stats, #${config.rootId} .ftp-form, #${config.rootId} .ftp-form-grid, #${config.rootId} .ftp-form-actions, #${config.rootId} .ftp-field, #${config.rootId} .ftp-profit-preview, #${config.rootId} .ftp-saved-flip-main, #${config.rootId} .ftp-saved-flip-side { display: grid; }
+    #${config.rootId} .ftp-title-button { display: flex; align-items: center; border: 0; background: transparent; color: #f4f6fb; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 0; }
     #${config.rootId} .ftp-version, #${config.rootId} .ftp-stat span, #${config.rootId} .ftp-field span, #${config.rootId} .ftp-profit-preview span, #${config.rootId} .ftp-profit-preview small, #${config.rootId} .ftp-saved-flip-main span { color: #9aa3b2; font-size: 11px; }
-    #${config.rootId} .ftp-body { grid-template-columns: 150px minmax(0, 1fr); min-height: 0; overflow: hidden; }
     #${config.rootId} .ftp-sidebar { align-content: start; gap: 6px; overflow-y: auto; border-right: 1px solid #313744; background: #151820; padding: 12px; }
+    #${config.rootId} .ftp-main-content { align-content: start; gap: 12px; min-width: 0; overflow-y: auto; padding: 14px; }
     #${config.rootId} .ftp-nav-button { width: 100%; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #9aa3b2; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 9px 10px; text-align: left; }
     #${config.rootId} .ftp-nav-button:hover, #${config.rootId} .ftp-nav-button[data-active="true"] { border-color: #4f8cff; background: #263145; color: #f4f6fb; }
-    #${config.rootId} .ftp-main-content { align-content: start; gap: 12px; min-width: 0; overflow-y: auto; padding: 14px; }
     #${config.rootId} .ftp-card, #${config.rootId} .ftp-stat { border: 1px solid #313744; border-radius: 8px; background: #20242d; padding: 12px; }
     #${config.rootId} .ftp-card h2 { margin: 0 0 6px; font-size: 13px; }
     #${config.rootId} .ftp-card p { margin: 0; color: #9aa3b2; font-size: 12px; line-height: 1.5; }
@@ -95,21 +96,21 @@
     #${config.rootId} .ftp-flip-row, #${config.rootId} .ftp-saved-flip, #${config.rootId} .ftp-chart-row { border: 1px solid #313744; border-radius: 6px; background: #181b22; font-size: 12px; padding: 8px; }
     #${config.rootId} .ftp-flip-row { justify-content: space-between; gap: 10px; }
     #${config.rootId} .ftp-saved-flip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
-    #${config.rootId} .ftp-saved-flip-main, #${config.rootId} .ftp-saved-flip-side, #${config.rootId} .ftp-field, #${config.rootId} .ftp-chart-row { gap: 5px; }
+    #${config.rootId} .ftp-saved-flip-main, #${config.rootId} .ftp-saved-flip-side, #${config.rootId} .ftp-field, #${config.rootId} .ftp-chart-row, #${config.rootId} .ftp-profit-preview { gap: 5px; }
     #${config.rootId} .ftp-saved-flip-side { justify-items: end; }
-    #${config.rootId} .ftp-row-actions, #${config.rootId} .ftp-window-actions { gap: 6px; }
     #${config.rootId} .ftp-chart-label { justify-content: space-between; gap: 8px; }
     #${config.rootId} .ftp-chart-track { overflow: hidden; height: 8px; border-radius: 999px; background: #111318; }
     #${config.rootId} .ftp-chart-bar { display: block; height: 100%; border-radius: inherit; background: #3ecf8e; }
     #${config.rootId} .ftp-chart-bar[data-profit-state="negative"] { background: #ff6b6b; }
     #${config.rootId} [data-profit-state="positive"], #${config.rootId} .ftp-status[data-status="success"] { color: #3ecf8e; }
     #${config.rootId} [data-profit-state="negative"], #${config.rootId} .ftp-status[data-status="error"] { color: #ff6b6b; }
+    #${config.rootId} .ftp-status[data-status="warning"] { color: #ffd166; }
     #${config.rootId} .ftp-status[data-status="info"] { color: #9aa3b2; }
     #${config.rootId} .ftp-form { gap: 10px; margin-top: 10px; }
     #${config.rootId} .ftp-subheading, #${config.rootId} .ftp-backup-actions { margin-top: 10px; }
     #${config.rootId} .ftp-input { width: 100%; box-sizing: border-box; border: 1px solid #313744; border-radius: 6px; background: #181b22; color: #f4f6fb; font: inherit; font-size: 12px; outline: none; padding: 8px; }
     #${config.rootId} .ftp-input:focus { border-color: #4f8cff; }
-    #${config.rootId} .ftp-profit-preview { gap: 3px; border: 1px solid #313744; border-radius: 8px; background: #181b22; padding: 10px; }
+    #${config.rootId} .ftp-profit-preview { border: 1px solid #313744; border-radius: 8px; background: #181b22; padding: 10px; }
     #${config.rootId} .ftp-profit-preview strong { font-size: 20px; }
     #${config.rootId} .ftp-primary-button, #${config.rootId} .ftp-secondary-button, #${config.rootId} .ftp-danger-button, #${config.rootId} .ftp-window-button { border: 0; border-radius: 6px; color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 9px 10px; }
     #${config.rootId} .ftp-primary-button { background: #4f8cff; }
@@ -146,10 +147,7 @@
     if (storageService && typeof storageService.update === 'function') {
       storageService.update(config.storagePrefix, (data) => ({
         ...data,
-        settings: {
-          ...data.settings,
-          activeRoute: route
-        }
+        settings: { ...data.settings, activeRoute: route }
       }));
       return;
     }
@@ -289,7 +287,7 @@
     const portfolio = getPortfolio(data);
     const statistics = getStatistics(data);
     const portfolioSummary = getPortfolioSummary(portfolio);
-    const dashboardHtml = renderModule(dashboard, { portfolioSummary, statistics }, 'Dashboard unavailable');
+    const dashboardHtml = renderModule(dashboard, { portfolioSummary, settings: data.settings || {}, statistics }, 'Dashboard unavailable');
     const recentFlipsHtml = dashboard && typeof dashboard.renderRecentFlips === 'function'
       ? dashboard.renderRecentFlips({ sales })
       : '<section class="ftp-card"><h2>Recent Flips unavailable</h2><p>This section could not load.</p></section>';
