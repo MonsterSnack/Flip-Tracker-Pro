@@ -1,29 +1,29 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.7.0
+// @version      0.7.1
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.0
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.0
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.1
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.1
 // @grant        none
 // ==/UserScript==
 
@@ -33,7 +33,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FT',
-    version: '0.7.0',
+    version: '0.7.1',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: { width: 760, height: 560, top: 96, right: 24 }
@@ -57,7 +57,7 @@
   const activeViewKey = `${config.storagePrefix}:activeView`;
   const routes = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'calculator', label: 'Calculator' },
+    { id: 'calculator', label: 'Record Sale' },
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'purchases', label: 'Purchases' },
     { id: 'history', label: 'History' },
@@ -294,7 +294,7 @@
       ? dashboard.renderRecentFlips({ sales })
       : '<section class="ftp-card"><h2>Recent Flips unavailable</h2><p>This section could not load.</p></section>';
     const analyticsHtml = renderModule(analytics, { sales, statistics }, 'Statistics unavailable');
-    const flipEntryHtml = renderModule(flipEntry, undefined, 'Calculator unavailable');
+    const flipEntryHtml = renderModule(flipEntry, undefined, 'Record Sale unavailable');
     const openPurchasesHtml = renderModule(openPurchases, { itemPriceSnapshots, priceSnapshots: itemPriceSnapshots, purchaseLots }, 'Purchases unavailable');
     const backupHtml = renderModule(backup, { storagePrefix: config.storagePrefix }, 'Settings unavailable');
     const savedFlipsHtml = renderModule(savedFlips, { sales }, 'History unavailable');
@@ -380,7 +380,7 @@
       flipEntry.bind(root, {
         onSave: () => {
           renderRoute(root);
-          notify('success', 'Flip saved', 'Your completed flip was saved.');
+          notify('success', 'Sale recorded', 'Your completed sale was saved.');
         },
         storagePrefix: config.storagePrefix,
         store: flipStore
