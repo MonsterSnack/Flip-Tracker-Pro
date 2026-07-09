@@ -1,30 +1,30 @@
 // ==UserScript==
 // @name         Flip Tracker Pro
 // @namespace    https://github.com/MonsterSnack/Flip-Tracker-Pro
-// @version      0.7.3
+// @version      0.7.5
 // @description  Desktop-style flip tracking tools for Torn.
 // @author       MonsterSnack
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/log-import-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.3
-// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.3
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/core/config.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/utils/html.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/event-bus.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/storage-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/notification-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/trade-accounting-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/torn-api-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/log-import-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/ui/window.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/purchase-lot-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/portfolio-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/statistics-service.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/services/flip-store.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/dashboard/dashboard.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/analytics/analytics.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/flip-entry/flip-entry.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/open-purchases/open-purchases.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/backup/backup.js?v=0.7.5
+// @require      https://raw.githubusercontent.com/MonsterSnack/Flip-Tracker-Pro/main/src/modules/saved-flips/saved-flips.js?v=0.7.5
 // @grant        none
 // ==/UserScript==
 
@@ -34,7 +34,7 @@
   const fallbackConfig = {
     appName: 'Flip Tracker Pro',
     shortName: 'FT',
-    version: '0.7.3',
+    version: '0.7.5',
     rootId: 'flip-tracker-pro-root',
     storagePrefix: 'flipTrackerPro',
     defaultWindow: { width: 760, height: 560, top: 96, right: 24 }
@@ -124,379 +124,64 @@
     #${config.rootId} .ftp-notification span { color: #9aa3b2; font-size: 11px; line-height: 1.4; }
   `;
 
-  function escapeHtml(value) {
-    return html && typeof html.escapeHtml === 'function' ? html.escapeHtml(value) : String(value ?? '');
-  }
+  function escapeHtml(value) { return html && typeof html.escapeHtml === 'function' ? html.escapeHtml(value) : String(value ?? ''); }
+  function formatMoney(value) { return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0, style: 'currency', currency: 'USD' }).format(value || 0); }
+  function formatPercent(value) { return `${(Number(value) || 0).toFixed(1)}%`; }
+  function getInitialRoute() { const data = storageService && typeof storageService.load === 'function' ? storageService.load(config.storagePrefix) : null; const savedRoute = data && data.settings ? data.settings.activeRoute : window.localStorage.getItem(activeViewKey); const route = legacyRouteMap[savedRoute] || savedRoute || 'dashboard'; return routes.some((item) => item.id === route) ? route : 'dashboard'; }
+  function saveActiveRoute(route) { if (storageService && typeof storageService.update === 'function') { storageService.update(config.storagePrefix, (data) => ({ ...data, settings: { ...data.settings, activeRoute: route } })); return; } window.localStorage.setItem(activeViewKey, route); }
+  function injectStyles() { if (document.querySelector('[data-flip-tracker-pro-styles]')) return; const styleElement = document.createElement('style'); styleElement.dataset.flipTrackerProStyles = 'true'; styleElement.textContent = styles; document.head.appendChild(styleElement); }
+  function createRoot() { const existingRoot = document.getElementById(config.rootId); if (existingRoot) return existingRoot; const root = document.createElement('section'); root.id = config.rootId; root.setAttribute('aria-label', config.appName); document.body.appendChild(root); return root; }
+  function getAppData() { return storageService && typeof storageService.load === 'function' ? storageService.load(config.storagePrefix) : { itemPriceSnapshots: [], purchaseLots: [], sales: [], settings: {} }; }
+  function getSales(data = getAppData()) { return Array.isArray(data.sales) ? data.sales : []; }
+  function getPurchaseLots(data = getAppData()) { return Array.isArray(data.purchaseLots) ? data.purchaseLots : []; }
+  function getPriceSnapshots(data = getAppData()) { return Array.isArray(data.itemPriceSnapshots) ? data.itemPriceSnapshots : []; }
+  function getPortfolio(data) { return portfolioService && typeof portfolioService.calculate === 'function' ? portfolioService.calculate(getPurchaseLots(data), data.settings, getPriceSnapshots(data)) : []; }
+  function getPortfolioSummary(portfolio) { return portfolioService && typeof portfolioService.summarize === 'function' ? portfolioService.summarize(portfolio) : { currentEstimatedProfit: 0, estimatedProfit: 0, itemCount: 0, openQuantity: 0, totalInvestment: 0 }; }
+  function getStatistics(data) { return statisticsService && typeof statisticsService.calculate === 'function' ? statisticsService.calculate(getSales(data), getPurchaseLots(data)) : { averageROI: 0, lifetimeProfit: 0, monthlyProfit: 0, todayProfit: 0, totalInvestment: 0, totalTrades: 0, weeklyProfit: 0 }; }
 
-  function formatMoney(value) {
-    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0, style: 'currency', currency: 'USD' }).format(value || 0);
-  }
-
-  function formatPercent(value) {
-    return `${(Number(value) || 0).toFixed(1)}%`;
-  }
-
-  function getInitialRoute() {
-    const data = storageService && typeof storageService.load === 'function' ? storageService.load(config.storagePrefix) : null;
-    const savedRoute = data && data.settings ? data.settings.activeRoute : window.localStorage.getItem(activeViewKey);
-    const route = legacyRouteMap[savedRoute] || savedRoute || 'dashboard';
-    return routes.some((item) => item.id === route) ? route : 'dashboard';
-  }
-
-  function saveActiveRoute(route) {
-    if (storageService && typeof storageService.update === 'function') {
-      storageService.update(config.storagePrefix, (data) => ({
-        ...data,
-        settings: { ...data.settings, activeRoute: route }
-      }));
-      return;
-    }
-
-    window.localStorage.setItem(activeViewKey, route);
-  }
-
-  function injectStyles() {
-    if (document.querySelector('[data-flip-tracker-pro-styles]')) {
-      return;
-    }
-
-    const styleElement = document.createElement('style');
-    styleElement.dataset.flipTrackerProStyles = 'true';
-    styleElement.textContent = styles;
-    document.head.appendChild(styleElement);
-  }
-
-  function createRoot() {
-    const existingRoot = document.getElementById(config.rootId);
-
-    if (existingRoot) {
-      return existingRoot;
-    }
-
-    const root = document.createElement('section');
-    root.id = config.rootId;
-    root.setAttribute('aria-label', config.appName);
-    document.body.appendChild(root);
-    return root;
-  }
-
-  function getAppData() {
-    return storageService && typeof storageService.load === 'function'
-      ? storageService.load(config.storagePrefix)
-      : { itemPriceSnapshots: [], purchaseLots: [], sales: [], settings: {} };
-  }
-
-  function getSales(data = getAppData()) {
-    return Array.isArray(data.sales) ? data.sales : [];
-  }
-
-  function getPurchaseLots(data = getAppData()) {
-    return Array.isArray(data.purchaseLots) ? data.purchaseLots : [];
-  }
-
-  function getPriceSnapshots(data = getAppData()) {
-    return Array.isArray(data.itemPriceSnapshots) ? data.itemPriceSnapshots : [];
-  }
-
-  function getPortfolio(data) {
-    return portfolioService && typeof portfolioService.calculate === 'function'
-      ? portfolioService.calculate(getPurchaseLots(data), data.settings, getPriceSnapshots(data))
-      : [];
-  }
-
-  function getPortfolioSummary(portfolio) {
-    return portfolioService && typeof portfolioService.summarize === 'function'
-      ? portfolioService.summarize(portfolio)
-      : { currentEstimatedProfit: 0, estimatedProfit: 0, itemCount: 0, openQuantity: 0, totalInvestment: 0 };
-  }
-
-  function getStatistics(data) {
-    return statisticsService && typeof statisticsService.calculate === 'function'
-      ? statisticsService.calculate(getSales(data), getPurchaseLots(data))
-      : { averageROI: 0, lifetimeProfit: 0, monthlyProfit: 0, todayProfit: 0, totalInvestment: 0, totalTrades: 0, weeklyProfit: 0 };
-  }
-
-  function renderSidebar() {
-    return `
-      <nav class="ftp-sidebar" aria-label="Flip Tracker sections">
-        ${routes.map((route) => `<button class="ftp-nav-button" type="button" data-view-route="${route.id}" data-active="${activeView === route.id}">${route.label}</button>`).join('')}
-      </nav>
-    `;
-  }
-
-  function renderModule(moduleReference, args, unavailableTitle) {
-    return moduleReference && typeof moduleReference.render === 'function'
-      ? moduleReference.render(args)
-      : `<section class="ftp-card"><h2>${escapeHtml(unavailableTitle)}</h2><p>This section could not load.</p></section>`;
-  }
-
-  function renderPortfolio(portfolio) {
-    if (!portfolio.length) {
-      return '<section class="ftp-card"><h2>Portfolio</h2><p>No purchase lots yet. Add open purchases to build your portfolio.</p></section>';
-    }
-
-    const rows = portfolio.map((item) => {
-      const liveHtml = item.priceUpdatedAt
-        ? `<span>Live ${formatMoney(item.currentSellPrice)} / P/L <strong data-profit-state="${item.currentEstimatedProfit >= 0 ? 'positive' : 'negative'}">${formatMoney(item.currentEstimatedProfit)}</strong></span>`
-        : '';
-
-      return `
-        <li class="ftp-saved-flip">
-          <div class="ftp-saved-flip-main">
-            <strong>${escapeHtml(item.itemName)}</strong>
-            <span>Qty ${item.quantity} / Average ${formatMoney(item.averageCost)} / Invested ${formatMoney(item.totalInvestment)}</span>
-            <span>Break-even ${formatMoney(item.breakEvenSellPrice)} / Target ${formatMoney(item.targetSellPrice)}</span>
-            ${liveHtml}
-          </div>
-          <div class="ftp-saved-flip-side">
-            <strong data-profit-state="${item.estimatedProfit >= 0 ? 'positive' : 'negative'}">${formatMoney(item.estimatedProfit)}</strong>
-            <span>${formatPercent(item.estimatedROI)}</span>
-          </div>
-        </li>
-      `;
-    }).join('');
-
-    return `
-      <section class="ftp-card">
-        <h2>Portfolio</h2>
-        <p>Average cost is derived from open purchase lots, not stored directly.</p>
-        <ul class="ftp-saved-flips">${rows}</ul>
-      </section>
-    `;
-  }
-
-  function renderStatisticsSummary(statistics) {
-    return `
-      <section class="ftp-stats ftp-analytics-stats" aria-label="Statistics summary">
-        <div class="ftp-stat"><span>Total trades</span><strong>${statistics.totalTrades}</strong></div>
-        <div class="ftp-stat"><span>Total investment</span><strong>${formatMoney(statistics.totalInvestment)}</strong></div>
-        <div class="ftp-stat"><span>Lifetime profit</span><strong>${formatMoney(statistics.lifetimeProfit)}</strong></div>
-        <div class="ftp-stat"><span>Today profit</span><strong>${formatMoney(statistics.todayProfit)}</strong></div>
-        <div class="ftp-stat"><span>Weekly profit</span><strong>${formatMoney(statistics.weeklyProfit)}</strong></div>
-        <div class="ftp-stat"><span>Monthly profit</span><strong>${formatMoney(statistics.monthlyProfit)}</strong></div>
-        <div class="ftp-stat"><span>Average ROI</span><strong>${formatPercent(statistics.averageROI)}</strong></div>
-      </section>
-    `;
-  }
+  function renderSidebar() { return `<nav class="ftp-sidebar" aria-label="Flip Tracker sections">${routes.map((route) => `<button class="ftp-nav-button" type="button" data-view-route="${route.id}" data-active="${activeView === route.id}">${route.label}</button>`).join('')}</nav>`; }
+  function renderModule(moduleReference, args, unavailableTitle) { return moduleReference && typeof moduleReference.render === 'function' ? moduleReference.render(args) : `<section class="ftp-card"><h2>${escapeHtml(unavailableTitle)}</h2><p>This section could not load.</p></section>`; }
+  function renderPortfolio(portfolio) { if (!portfolio.length) return '<section class="ftp-card"><h2>Portfolio</h2><p>No purchase lots yet. Add open purchases to build your portfolio.</p></section>'; const rows = portfolio.map((item) => { const liveHtml = item.priceUpdatedAt ? `<span>Live ${formatMoney(item.currentSellPrice)} / P/L <strong data-profit-state="${item.currentEstimatedProfit >= 0 ? 'positive' : 'negative'}">${formatMoney(item.currentEstimatedProfit)}</strong></span>` : ''; return `<li class="ftp-saved-flip"><div class="ftp-saved-flip-main"><strong>${escapeHtml(item.itemName)}</strong><span>Qty ${item.quantity} / Average ${formatMoney(item.averageCost)} / Invested ${formatMoney(item.totalInvestment)}</span><span>Break-even ${formatMoney(item.breakEvenSellPrice)} / Target ${formatMoney(item.targetSellPrice)}</span>${liveHtml}</div><div class="ftp-saved-flip-side"><strong data-profit-state="${item.estimatedProfit >= 0 ? 'positive' : 'negative'}">${formatMoney(item.estimatedProfit)}</strong><span>${formatPercent(item.estimatedROI)}</span></div></li>`; }).join(''); return `<section class="ftp-card"><h2>Portfolio</h2><p>Average cost is derived from open purchase lots, not stored directly.</p><ul class="ftp-saved-flips">${rows}</ul></section>`; }
+  function renderStatisticsSummary(statistics) { return `<section class="ftp-stats ftp-analytics-stats" aria-label="Statistics summary"><div class="ftp-stat"><span>Total trades</span><strong>${statistics.totalTrades}</strong></div><div class="ftp-stat"><span>Total investment</span><strong>${formatMoney(statistics.totalInvestment)}</strong></div><div class="ftp-stat"><span>Lifetime profit</span><strong>${formatMoney(statistics.lifetimeProfit)}</strong></div><div class="ftp-stat"><span>Today profit</span><strong>${formatMoney(statistics.todayProfit)}</strong></div><div class="ftp-stat"><span>Weekly profit</span><strong>${formatMoney(statistics.weeklyProfit)}</strong></div><div class="ftp-stat"><span>Monthly profit</span><strong>${formatMoney(statistics.monthlyProfit)}</strong></div><div class="ftp-stat"><span>Average ROI</span><strong>${formatPercent(statistics.averageROI)}</strong></div></section>`; }
 
   function getRouteHtml() {
-    const data = getAppData();
-    const sales = getSales(data);
-    const purchaseLots = getPurchaseLots(data);
-    const itemPriceSnapshots = getPriceSnapshots(data);
-    const portfolio = getPortfolio(data);
-    const statistics = getStatistics(data);
-    const portfolioSummary = getPortfolioSummary(portfolio);
+    const data = getAppData(); const sales = getSales(data); const purchaseLots = getPurchaseLots(data); const itemPriceSnapshots = getPriceSnapshots(data); const portfolio = getPortfolio(data); const statistics = getStatistics(data); const portfolioSummary = getPortfolioSummary(portfolio);
     const dashboardHtml = renderModule(dashboard, { portfolioSummary, settings: data.settings || {}, statistics }, 'Dashboard unavailable');
-    const recentFlipsHtml = dashboard && typeof dashboard.renderRecentFlips === 'function'
-      ? dashboard.renderRecentFlips({ sales })
-      : '<section class="ftp-card"><h2>Recent Flips unavailable</h2><p>This section could not load.</p></section>';
+    const recentFlipsHtml = dashboard && typeof dashboard.renderRecentFlips === 'function' ? dashboard.renderRecentFlips({ sales }) : '<section class="ftp-card"><h2>Recent Flips unavailable</h2><p>This section could not load.</p></section>';
     const analyticsHtml = renderModule(analytics, { sales, statistics }, 'Statistics unavailable');
     const flipEntryHtml = renderModule(flipEntry, undefined, 'Record Sale unavailable');
     const openPurchasesHtml = renderModule(openPurchases, { itemPriceSnapshots, priceSnapshots: itemPriceSnapshots, purchaseLots }, 'Purchases unavailable');
     const backupHtml = renderModule(backup, { storagePrefix: config.storagePrefix }, 'Settings unavailable');
     const savedFlipsHtml = renderModule(savedFlips, { sales }, 'History unavailable');
-
-    if (activeView === 'calculator') {
-      return flipEntryHtml;
-    }
-
-    if (activeView === 'portfolio') {
-      return renderPortfolio(portfolio);
-    }
-
-    if (activeView === 'purchases') {
-      return openPurchasesHtml;
-    }
-
-    if (activeView === 'history') {
-      return `${recentFlipsHtml}${savedFlipsHtml}`;
-    }
-
-    if (activeView === 'statistics') {
-      return `${renderStatisticsSummary(statistics)}${analyticsHtml}`;
-    }
-
-    if (activeView === 'settings') {
-      return backupHtml;
-    }
-
+    if (activeView === 'calculator') return flipEntryHtml;
+    if (activeView === 'portfolio') return renderPortfolio(portfolio);
+    if (activeView === 'purchases') return openPurchasesHtml;
+    if (activeView === 'history') return `${recentFlipsHtml}${savedFlipsHtml}`;
+    if (activeView === 'statistics') return `${renderStatisticsSummary(statistics)}${analyticsHtml}`;
+    if (activeView === 'settings') return backupHtml;
     return `${dashboardHtml}${recentFlipsHtml}`;
   }
 
-  function getAppHtml() {
-    return `${renderSidebar()}<div class="ftp-main-content" data-route-content>${getRouteHtml()}</div>`;
-  }
-
-  function notify(type, title, message) {
-    if (eventBus && typeof eventBus.emit === 'function') {
-      eventBus.emit('notify', { message, title, type });
-    }
-  }
-
-  function updateSidebarState(root) {
-    root.querySelectorAll('[data-view-route]').forEach((button) => {
-      button.dataset.active = String(button.dataset.viewRoute === activeView);
-    });
-  }
-
-  function renderRoute(root) {
-    const routeContent = root.querySelector('[data-route-content]');
-
-    if (!routeContent) {
-      return;
-    }
-
-    routeContent.innerHTML = getRouteHtml();
-    updateSidebarState(root);
-    bindRouteModules(root);
-  }
-
-  function setActiveRoute(root, route) {
-    if (!routes.some((item) => item.id === route)) {
-      return;
-    }
-
-    activeView = route;
-    saveActiveRoute(route);
-
-    if (eventBus && typeof eventBus.emit === 'function') {
-      eventBus.emit('route:changed', { route: activeView });
-    }
-
-    renderRoute(root);
-  }
-
-  function bindSidebar(root) {
-    root.querySelectorAll('[data-view-route]').forEach((button) => {
-      button.addEventListener('click', () => setActiveRoute(root, button.dataset.viewRoute || 'dashboard'));
-    });
-  }
-
-  function bindFlipEntry(root) {
-    if (flipEntry && typeof flipEntry.bind === 'function') {
-      flipEntry.bind(root, {
-        onSave: () => {
-          renderRoute(root);
-          notify('success', 'Sale recorded', 'Your completed sale was saved.');
-        },
-        storagePrefix: config.storagePrefix,
-        store: flipStore
-      });
-    }
-  }
-
-  function bindOpenPurchases(root) {
-    if (openPurchases && typeof openPurchases.bind === 'function') {
-      const data = getAppData();
-      openPurchases.bind(root, {
-        onChange: () => {
-          renderRoute(root);
-          notify('success', 'Purchases updated', 'Your purchase lots were updated.');
-        },
-        priceSnapshots: getPriceSnapshots(data),
-        storagePrefix: config.storagePrefix,
-        store: flipStore
-      });
-    }
-  }
-
-  function bindSavedFlips(root) {
-    if (savedFlips && typeof savedFlips.bind === 'function') {
-      savedFlips.bind(root, {
-        onDelete: () => {
-          renderRoute(root);
-          notify('info', 'Flip deleted', 'The saved flip was removed.');
-        },
-        onEdit: (sale) => {
-          activeView = 'calculator';
-          saveActiveRoute(activeView);
-          renderRoute(root);
-
-          const form = root.querySelector('[data-flip-entry-form]');
-
-          if (form && typeof form.loadFlip === 'function') {
-            form.loadFlip(sale);
-          }
-        },
-        storagePrefix: config.storagePrefix,
-        store: flipStore
-      });
-    }
-  }
-
-  function bindBackup(root) {
-    if (backup && typeof backup.bind === 'function') {
-      backup.bind(root, {
-        eventBus,
-        onImport: () => renderRoute(root),
-        storagePrefix: config.storagePrefix
-      });
-    }
-  }
-
-  function bindRouteModules(root) {
-    if (activeView === 'calculator') {
-      bindFlipEntry(root);
-      return;
-    }
-
-    if (activeView === 'history') {
-      bindSavedFlips(root);
-      return;
-    }
-
-    if (activeView === 'purchases') {
-      bindOpenPurchases(root);
-      return;
-    }
-
-    if (activeView === 'settings') {
-      bindBackup(root);
-    }
-  }
+  function getAppHtml() { return `${renderSidebar()}<div class="ftp-main-content" data-route-content>${getRouteHtml()}</div>`; }
+  function notify(type, title, message) { if (eventBus && typeof eventBus.emit === 'function') eventBus.emit('notify', { message, title, type }); }
+  function updateSidebarState(root) { root.querySelectorAll('[data-view-route]').forEach((button) => { button.dataset.active = String(button.dataset.viewRoute === activeView); }); }
+  function renderRoute(root) { const routeContent = root.querySelector('[data-route-content]'); if (!routeContent) return; routeContent.innerHTML = getRouteHtml(); updateSidebarState(root); bindRouteModules(root); }
+  function setActiveRoute(root, route) { if (!routes.some((item) => item.id === route)) return; activeView = route; saveActiveRoute(route); if (eventBus && typeof eventBus.emit === 'function') eventBus.emit('route:changed', { route: activeView }); renderRoute(root); }
+  function bindSidebar(root) { root.querySelectorAll('[data-view-route]').forEach((button) => { button.addEventListener('click', () => setActiveRoute(root, button.dataset.viewRoute || 'dashboard')); }); }
+  function bindFlipEntry(root) { if (flipEntry && typeof flipEntry.bind === 'function') flipEntry.bind(root, { onSave: () => { renderRoute(root); notify('success', 'Sale recorded', 'Your completed sale was saved.'); }, storagePrefix: config.storagePrefix, store: flipStore }); }
+  function bindOpenPurchases(root) { if (openPurchases && typeof openPurchases.bind === 'function') { const data = getAppData(); openPurchases.bind(root, { onChange: () => { renderRoute(root); notify('success', 'Purchases updated', 'Your purchase lots were updated.'); }, priceSnapshots: getPriceSnapshots(data), storagePrefix: config.storagePrefix, store: flipStore }); } }
+  function bindSavedFlips(root) { if (savedFlips && typeof savedFlips.bind === 'function') savedFlips.bind(root, { onDelete: () => { renderRoute(root); notify('info', 'Flip deleted', 'The saved flip was removed.'); }, onEdit: (sale) => { activeView = 'calculator'; saveActiveRoute(activeView); renderRoute(root); const form = root.querySelector('[data-flip-entry-form]'); if (form && typeof form.loadFlip === 'function') form.loadFlip(sale); }, storagePrefix: config.storagePrefix, store: flipStore }); }
+  function bindBackup(root) { if (backup && typeof backup.bind === 'function') backup.bind(root, { eventBus, onImport: () => renderRoute(root), storagePrefix: config.storagePrefix }); }
+  function bindRouteModules(root) { if (activeView === 'calculator') { bindFlipEntry(root); return; } if (activeView === 'history') { bindSavedFlips(root); return; } if (activeView === 'purchases') { bindOpenPurchases(root); return; } if (activeView === 'settings') bindBackup(root); }
 
   function renderApp(root) {
     root.innerHTML = '';
-
-    if (!windowShell) {
-      root.innerHTML = '<div class="ftp-window"><main class="ftp-body"><section class="ftp-card"><h2>Startup error</h2><p>Window shell failed to load.</p></section></main></div>';
-      return;
-    }
-
-    const appWindow = windowShell.createWindow({
-      title: config.appName,
-      shortTitle: config.shortName || 'FT',
-      version: config.version,
-      bodyHtml: getAppHtml(),
-      storagePrefix: config.storagePrefix
-    });
-
-    root.appendChild(appWindow);
-    windowShell.restorePosition(root, config.storagePrefix);
-    bindSidebar(root);
-    bindRouteModules(root);
+    if (!windowShell) { root.innerHTML = '<div class="ftp-window"><main class="ftp-body"><section class="ftp-card"><h2>Startup error</h2><p>Window shell failed to load.</p></section></main></div>'; return; }
+    const appWindow = windowShell.createWindow({ title: config.appName, shortTitle: config.shortName || 'FT', version: config.version, bodyHtml: getAppHtml(), storagePrefix: config.storagePrefix });
+    root.appendChild(appWindow); windowShell.restorePosition(root, config.storagePrefix); bindSidebar(root); bindRouteModules(root);
   }
 
-  function start() {
-    if (!document.body) {
-      window.requestAnimationFrame(start);
-      return;
-    }
-
-    if (storageService && typeof storageService.load === 'function') {
-      storageService.load(config.storagePrefix);
-    }
-
-    injectStyles();
-    const root = createRoot();
-
-    if (notificationService && typeof notificationService.bind === 'function') {
-      notificationService.bind(eventBus, { rootId: config.rootId });
-    }
-
-    renderApp(root);
-  }
+  function start() { if (!document.body) { window.requestAnimationFrame(start); return; } if (storageService && typeof storageService.load === 'function') storageService.load(config.storagePrefix); injectStyles(); const root = createRoot(); if (notificationService && typeof notificationService.bind === 'function') notificationService.bind(eventBus, { rootId: config.rootId }); renderApp(root); }
 
   start();
 }());
