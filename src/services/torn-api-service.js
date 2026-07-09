@@ -1,6 +1,6 @@
 const FlipTrackerProTornApiService = (() => {
   const baseUrl = 'https://api.torn.com';
-  const customKeyBuilderFallbackUrl = 'https://www.torn.com/api.html';
+  const customKeyBuilderFallbackUrl = 'https://www.torn.com/preferences.php#tab=api';
   const maxQueueSize = 8;
   const minDelayMs = 750;
   const cacheTtls = Object.freeze({
@@ -14,6 +14,15 @@ const FlipTrackerProTornApiService = (() => {
   const queue = [];
   let activeRequest = false;
   let lastRequestAt = 0;
+
+  function getConfig() {
+    return window.FlipTrackerProConfig || {};
+  }
+
+  function getRequiredLogTypeIds() {
+    const config = getConfig();
+    return Array.isArray(config.requiredLogTypeIds) ? config.requiredLogTypeIds.map(Number).filter(Boolean) : [1225, 1220, 4201, 1112, 4200, 5927, 5510];
+  }
 
   function getStorageService() {
     return window.FlipTrackerProStorageService;
@@ -78,6 +87,7 @@ const FlipTrackerProTornApiService = (() => {
       lastErrorCode: settings.apiLastErrorCode || '',
       lastRequest: settings.apiLastRequest || {},
       maskedKey: hasKey ? maskKey(settings.apiKey) : '',
+      requiredLogTypeIds: getRequiredLogTypeIds(),
       status: settings.apiStatus || (enabled ? 'ready' : 'disabled')
     };
   }
@@ -112,7 +122,7 @@ const FlipTrackerProTornApiService = (() => {
 
   function sanitizeRequest(requestOptions) {
     return {
-      endpoint: `/${String(requestOptions.section || 'torn').replace(/[^a-z_]/gi, '')}`,
+      endpoint: `/${String(requestOptions.section || 'torn').replace(/[^a-z_]/gi, '')}/`,
       id: requestOptions.id ? String(requestOptions.id).replace(/[^a-z0-9_-]/gi, '') : '',
       selections: String(requestOptions.selections || ''),
       params: { ...(requestOptions.params || {}) }
@@ -283,21 +293,68 @@ const FlipTrackerProTornApiService = (() => {
     }));
   }
 
+  function looksLikeLog(value) {
+    return value && typeof value === 'object' && (
+      value.timestamp !== undefined || value.time !== undefined || value.title !== undefined || value.message !== undefined || value.text !== undefined || value.log !== undefined
+    );
+  }
+
+  function getLogMessage(log) {
+    return String(log.message || log.text || log.title || log.event || log.log || log.data || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeLog(log, id) {
+    const raw = log && typeof log === 'object' ? log : { message: String(log || '') };
+    const message = getLogMessage(raw);
+
+    return {
+      id: String(raw.id || raw.log_id || raw.logId || id || `${raw.timestamp || raw.time || Date.now()}-${message}`),
+      timestamp: raw.timestamp || raw.time || raw.created_at || raw.date || '',
+      type: raw.type || raw.category || raw.cat || raw.logType || raw.log_id || raw.logId || '',
+      category: raw.category || raw.cat || raw.type || '',
+      logId: raw.logId || raw.log_id || raw.type || raw.category || '',
+      title: String(raw.title || ''),
+      message,
+      raw
+    };
+  }
+
+  function collectLogs(value, logs = [], key = '') {
+    if (!value) {
+      return logs;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => collectLogs(entry, logs, index));
+      return logs;
+    }
+
+    if (looksLikeLog(value)) {
+      logs.push(normalizeLog(value, key));
+      return logs;
+    }
+
+    if (typeof value === 'object') {
+      Object.entries(value).forEach(([entryKey, entryValue]) => collectLogs(entryValue, logs, entryKey));
+    }
+
+    return logs;
+  }
+
   function normalizeLogs(payload) {
-    const logs = payload && (payload.log || payload.logs || payload.user && (payload.user.log || payload.user.logs) || []);
-
-    if (Array.isArray(logs)) {
-      return logs.map((log, index) => ({ ...log, id: log.id || log.log_id || index }));
+    if (!payload || typeof payload !== 'object') {
+      return [];
     }
 
-    if (logs && typeof logs === 'object') {
-      return Object.entries(logs).map(([logId, log]) => ({
-        ...(log && typeof log === 'object' ? log : { message: String(log || '') }),
-        id: logId
-      }));
+    if (payload.log || payload.logs) {
+      return collectLogs(payload.log || payload.logs);
     }
 
-    return [];
+    if (payload.user && (payload.user.log || payload.user.logs)) {
+      return collectLogs(payload.user.log || payload.user.logs);
+    }
+
+    return collectLogs(payload);
   }
 
   function getSelectionStrings(payload) {
@@ -354,6 +411,45 @@ const FlipTrackerProTornApiService = (() => {
     };
   }
 
+  function getLogStrategy(result, attemptedFiltering) {
+    if (result.ok) {
+      return attemptedFiltering ? 'filtered-by-log-ids' : 'fallback-unfiltered';
+    }
+
+    if (Number(result.code) === 16) {
+      return 'failed-permission';
+    }
+
+    if (Number(result.code) === 28) {
+      return 'failed-invalid-log-id';
+    }
+
+    return 'failed-other';
+  }
+
+  function buildLogDebug(result, logs, attemptedFiltering, requiredLogIds) {
+    return {
+      requiredLogTypeIds: requiredLogIds,
+      logIdFilteringAttempted: Boolean(attemptedFiltering),
+      strategyUsed: getLogStrategy(result, attemptedFiltering),
+      lastEndpoint: result.request && result.request.endpoint,
+      lastSelections: result.request && result.request.selections,
+      lastParams: result.request && result.request.params,
+      lastErrorCode: result.code || '',
+      lastError: result.error || '',
+      rawLogsReturned: Array.isArray(logs) ? logs.length : 0,
+      normalizedLogs: Array.isArray(logs) ? logs.length : 0,
+      logsReturned: Array.isArray(logs) ? logs.length : 0,
+      classifiedPurchases: 0,
+      classifiedSales: 0,
+      duplicatesSkipped: 0,
+      purchasesImported: 0,
+      salesImported: 0,
+      unmatchedSales: 0,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
   async function fetchItemPrices(storagePrefix, { bypassCache = false } = {}) {
     const result = await request(storagePrefix, 'itemPrices', {
       section: 'torn',
@@ -379,60 +475,55 @@ const FlipTrackerProTornApiService = (() => {
   }
 
   async function fetchUserLogs(storagePrefix, { from = '', to = '', bypassCache = true } = {}) {
-    const params = {};
+    const requiredLogIds = getRequiredLogTypeIds();
+    const baseParams = {};
 
     if (from) {
-      params.from = from;
+      baseParams.from = from;
     }
 
     if (to) {
-      params.to = to;
+      baseParams.to = to;
     }
 
-    const result = await request(storagePrefix, 'logs', {
+    if (bypassCache) {
+      baseParams._ = Date.now();
+    }
+
+    const filteredResult = await request(storagePrefix, 'logs', {
       section: 'user',
       selections: 'log',
-      params,
+      params: {
+        ...baseParams,
+        log: requiredLogIds.join(',')
+      },
       bypassCache
     });
 
-    if (!result.ok) {
-      updateSettings(storagePrefix, {
-        logImportDebug: {
-          lastEndpoint: result.request && result.request.endpoint,
-          lastSelections: result.request && result.request.selections,
-          lastParams: result.request && result.request.params,
-          lastErrorCode: result.code || '',
-          lastError: result.error || '',
-          logsReturned: 0,
-          classifiedPurchases: 0,
-          classifiedSales: 0,
-          duplicatesSkipped: 0,
-          unmatchedSales: 0,
-          updatedAt: new Date().toISOString()
-        }
+    let result = filteredResult;
+    let attemptedFiltering = true;
+
+    if (!filteredResult.ok && Number(filteredResult.code) === 28) {
+      result = await request(storagePrefix, 'logs', {
+        section: 'user',
+        selections: 'log',
+        params: baseParams,
+        bypassCache: true
       });
-      return result;
+      attemptedFiltering = false;
+    }
+
+    if (!result.ok) {
+      const debug = buildLogDebug(result, [], attemptedFiltering, requiredLogIds);
+      updateSettings(storagePrefix, { logImportDebug: debug });
+      return { ...result, debug, requiredLogTypeIds: requiredLogIds, strategyUsed: debug.strategyUsed };
     }
 
     const logs = normalizeLogs(result.data);
-    updateSettings(storagePrefix, {
-      logImportDebug: {
-        lastEndpoint: result.request && result.request.endpoint,
-        lastSelections: result.request && result.request.selections,
-        lastParams: result.request && result.request.params,
-        lastErrorCode: '',
-        lastError: '',
-        logsReturned: logs.length,
-        classifiedPurchases: 0,
-        classifiedSales: 0,
-        duplicatesSkipped: 0,
-        unmatchedSales: 0,
-        updatedAt: new Date().toISOString()
-      }
-    });
+    const debug = buildLogDebug(result, logs, attemptedFiltering, requiredLogIds);
+    updateSettings(storagePrefix, { logImportDebug: debug });
 
-    return { ...result, data: logs };
+    return { ...result, data: logs, debug, requiredLogTypeIds: requiredLogIds, strategyUsed: debug.strategyUsed };
   }
 
   async function fetchKeyInfo(storagePrefix, { bypassCache = true } = {}) {
@@ -561,6 +652,7 @@ const FlipTrackerProTornApiService = (() => {
     fetchKeyInfo,
     fetchUserLogs,
     getCustomKeyBuilderUrl,
+    getRequiredLogTypeIds,
     getStatus,
     maskKey,
     request,
