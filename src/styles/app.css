@@ -1,0 +1,10 @@
+/* Additional standalone styles bundled by scripts/build-userscript.js. */
+#flip-tracker-pro-root details.ftp-profit-preview summary {
+  cursor: pointer;
+  color: #f4f6fb;
+  font-weight: 700;
+}
+
+#flip-tracker-pro-root details.ftp-profit-preview[open] {
+  gap: 6px;
+}
