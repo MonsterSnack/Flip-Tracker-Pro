@@ -271,10 +271,6 @@ const FlipTrackerProBackup = (() => {
 
         updateLogImportStatus(ok ? 'success' : 'error', ok ? message : (summary.errors || ['Import failed.']).join(' '), summary);
         emitNotice(ok ? 'success' : 'warning', 'Log import finished', message);
-
-        if (typeof onImport === 'function') {
-          onImport();
-        }
       } catch (error) {
         updateLogImportStatus('error', error.message || 'Could not import logs.');
         emitNotice('error', 'Log import error', error.message || 'Could not import logs.');
