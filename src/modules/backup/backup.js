@@ -2,7 +2,7 @@ const FlipTrackerProBackup = (() => {
   function escapeHtml(value) {
     return window.FlipTrackerProHtml && typeof window.FlipTrackerProHtml.escapeHtml === 'function'
       ? window.FlipTrackerProHtml.escapeHtml(value)
-      : String(value ?? '');
+      : String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
   }
 
   function getConfig() {
@@ -33,7 +33,9 @@ const FlipTrackerProBackup = (() => {
 
   function getStoredData(storagePrefix) {
     const storageService = getStorageService();
-    return storageService && typeof storageService.load === 'function' ? storageService.load(storagePrefix) : { settings: {}, importReviewQueue: [] };
+    return storageService && typeof storageService.load === 'function'
+      ? storageService.load(storagePrefix)
+      : { settings: {}, importReviewQueue: [] };
   }
 
   function getStoredSettings(storagePrefix) {
@@ -45,7 +47,16 @@ const FlipTrackerProBackup = (() => {
     if (tornApiService && typeof tornApiService.getStatus === 'function') return tornApiService.getStatus(storagePrefix);
     const settings = getStoredSettings(storagePrefix);
     const hasKey = Boolean(settings.apiKey);
-    return { connected: Boolean(settings.apiEnabled && hasKey), diagnostics: settings.apiDiagnostics || {}, enabled: Boolean(settings.apiEnabled && hasKey), hasKey, lastError: settings.apiLastError || '', lastErrorCode: settings.apiLastErrorCode || '', maskedKey: hasKey ? 'Saved' : '', status: hasKey && settings.apiEnabled ? 'ready' : 'disabled' };
+    return {
+      connected: Boolean(settings.apiEnabled && hasKey),
+      diagnostics: settings.apiDiagnostics || {},
+      enabled: Boolean(settings.apiEnabled && hasKey),
+      hasKey,
+      lastError: settings.apiLastError || '',
+      lastErrorCode: settings.apiLastErrorCode || '',
+      maskedKey: hasKey ? 'Saved' : '',
+      status: hasKey && settings.apiEnabled ? 'ready' : 'disabled'
+    };
   }
 
   function getLogImportDebug(storagePrefix) {
@@ -72,6 +83,13 @@ const FlipTrackerProBackup = (() => {
     return message ? `<p class="ftp-status" data-status="${escapeHtml(status)}">${escapeHtml(message)}</p>` : '';
   }
 
+  function metric(source, key, fallback = 0) {
+    if (!source) return fallback;
+    if (source[key] !== undefined && source[key] !== null) return source[key];
+    if (source.debug && source.debug[key] !== undefined && source.debug[key] !== null) return source.debug[key];
+    return fallback;
+  }
+
   function renderApiDiagnostics(apiState) {
     const diagnostics = apiState.diagnostics || {};
     return `
@@ -89,7 +107,7 @@ const FlipTrackerProBackup = (() => {
 
   function renderImportSummary(summary, storagePrefix) {
     if (!summary) return '';
-    const reviewCount = getReviewQueue(storagePrefix).length || summary.activeReviewItems || summary.reviewCandidatesCreated || 0;
+    const reviewCount = getReviewQueue(storagePrefix).length || metric(summary, 'activeReviewItems') || metric(summary, 'reviewCandidatesCreated');
     const diagnostic = summary.diagnosticMessage ? `<small>${escapeHtml(summary.diagnosticMessage)}</small>` : '';
     const warnings = Array.isArray(summary.warnings) && summary.warnings.length ? `<small>${summary.warnings.map(escapeHtml).join(' | ')}</small>` : '';
     const errors = Array.isArray(summary.errors) && summary.errors.length ? `<small>${summary.errors.map(escapeHtml).join(' | ')}</small>` : '';
@@ -98,9 +116,12 @@ const FlipTrackerProBackup = (() => {
     return `
       <div class="ftp-profit-preview" data-log-import-summary>
         <span>Import summary</span>
-        <small>Purchases ${summary.purchasesImported || 0} / Sales ${summary.salesImported || 0} / Duplicates ${summary.duplicatesSkipped || 0} / Unmatched sales ${summary.unmatchedSales || 0}</small>
-        <small>Needs review ${reviewCount} / Parser failures ${summary.parserFailures || 0} / Validation failures ${summary.validationFailures || 0}</small>
-        <small>Pipe buys ${summary.pipeBuyMatches || 0} / Pipe sells ${summary.pipeSellMatches || 0} / Text buys ${summary.textBuyMatches || 0} / Text sells ${summary.textSellMatches || 0}</small>
+        <small>Purchases ${metric(summary, 'purchasesImported')} / Sales ${metric(summary, 'salesImported')} / Duplicates ${metric(summary, 'duplicatesSkipped')} / Unmatched sales ${metric(summary, 'unmatchedSales')}</small>
+        <small>Needs review ${reviewCount} / Parser failures ${metric(summary, 'parserFailures')} / Validation failures ${metric(summary, 'validationFailures')}</small>
+        <small>Buy IDs ${metric(summary, 'buyIdMatches')} / Sell IDs ${metric(summary, 'sellIdMatches')} / Classified buys ${metric(summary, 'classifiedPurchases')} / Classified sells ${metric(summary, 'classifiedSales')}</small>
+        <small>Pipe buy logs found ${metric(summary, 'pipeBuyLogsFound')} / Pipe sell logs found ${metric(summary, 'pipeSellLogsFound')}</small>
+        <small>Buy candidates pipe ${metric(summary, 'pipeBuyCandidatesCreated')} / text ${metric(summary, 'textBuyCandidatesCreated')} / structured ${metric(summary, 'structuredBuyCandidatesCreated')}</small>
+        <small>Sell candidates pipe ${metric(summary, 'pipeSellCandidatesCreated')} / text ${metric(summary, 'textSellCandidatesCreated')} / structured ${metric(summary, 'structuredSellCandidatesCreated')}</small>
         ${progress}${diagnostic}${warnings}${errors}${reviewButton}
       </div>
     `;
@@ -108,12 +129,16 @@ const FlipTrackerProBackup = (() => {
 
   function renderReviewItem(item) {
     const reviewId = escapeHtml(item.id || item.entryId || item.originalLogId);
+    const rawKeys = Array.isArray(item.rawKeys) && item.rawKeys.length ? item.rawKeys : item.rawSampleKeys || [];
+    const pipeParts = Array.isArray(item.pipeParts) ? item.pipeParts : [];
     return `
       <article class="ftp-profit-preview" data-review-item="${reviewId}">
         <span>${escapeHtml(item.type || 'buy')} / entry ${escapeHtml(item.entryId || '')} / log ${escapeHtml(item.logTypeId || '')}</span>
         <small>${escapeHtml(item.timestamp || '')}</small>
         <small>${escapeHtml(item.reason || '')}</small>
         <small>${escapeHtml(item.textPreview || '')}</small>
+        <small>Raw keys: ${escapeHtml(rawKeys.join(', ') || 'None')}</small>
+        <small>Pipe parts: ${escapeHtml(pipeParts.join(' | ') || 'None')}</small>
         <div class="ftp-form-grid">
           <label class="ftp-field"><span>Item name</span><input class="ftp-input" data-review-field="itemName" value="${escapeHtml(item.itemName || '')}" placeholder="Item name"></label>
           <label class="ftp-field"><span>Item ID</span><input class="ftp-input" data-review-field="itemId" value="${escapeHtml(item.itemId || '')}" placeholder="1301"></label>
@@ -151,33 +176,62 @@ const FlipTrackerProBackup = (() => {
     `;
   }
 
+  function renderParserSelfTest(debug = {}) {
+    const tests = Array.isArray(debug.parserSelfTest) ? debug.parserSelfTest : [];
+    if (!tests.length) return '<small>Parser self-test: not run yet.</small>';
+    const passed = tests.filter((test) => test.passed).length;
+    const rows = tests.map((test) => `<small>${escapeHtml(test.passed ? 'PASS' : 'FAIL')} ${escapeHtml(test.name || '')}: ${escapeHtml(test.reason || 'ok')}</small>`).join('');
+    return `<small>Parser self-test: ${passed}/${tests.length} passing</small>${rows}`;
+  }
+
+  function renderRecognizedLog(log) {
+    const pipeParts = Array.isArray(log.pipeParts) ? log.pipeParts : [];
+    const rawKeys = Array.isArray(log.rawKeys) ? log.rawKeys : [];
+    return `
+      <small>${escapeHtml(`${log.entryId || ''} / ${log.logTypeId || ''} / ${log.title || ''} / ${log.timestamp || ''}`)}</small>
+      <small>Preview: ${escapeHtml(log.textPreview || '')}</small>
+      <small>Pipe parts: ${escapeHtml(pipeParts.join(' | ') || 'None')}</small>
+      <small>Raw keys: ${escapeHtml(rawKeys.join(', ') || 'None')}</small>
+    `;
+  }
+
   function renderLogImportDebug(debug = {}, storagePrefix = '') {
     const params = debug.lastParams && typeof debug.lastParams === 'object' ? JSON.stringify(debug.lastParams) : '{}';
-    const samples = Array.isArray(debug.firstRecognizedLogs) && debug.firstRecognizedLogs.length ? debug.firstRecognizedLogs.slice(0, 5) : Array.isArray(debug.firstLogs) ? debug.firstLogs.slice(0, 5) : [];
-    const sampleHtml = samples.map((log) => `<small>${escapeHtml(`${log.entryId || ''} / ${log.logTypeId || ''} / ${log.timestamp || ''} / ${log.textPreview || ''} / keys: ${(log.rawKeys || []).join(', ')}`)}</small>`).join('');
+    const samples = Array.isArray(debug.firstRecognizedLogs) && debug.firstRecognizedLogs.length
+      ? debug.firstRecognizedLogs.slice(0, 5)
+      : Array.isArray(debug.firstLogs) ? debug.firstLogs.slice(0, 5) : [];
     const timings = debug.timings || {};
     const reasons = Array.isArray(debug.parserFailureReasons) && debug.parserFailureReasons.length ? debug.parserFailureReasons.join(' | ') : 'None';
+    const zeroPurchaseWarning = Number(debug.buyIdMatches || 0) > 0 && Number(debug.purchasesSaved || debug.purchasesImported || 0) === 0
+      ? `<small>Buy logs were detected but could not be converted into purchases because: ${escapeHtml(reasons === 'None' ? debug.diagnosticMessage || 'no parser created a complete buy candidate.' : reasons)}</small>`
+      : '';
     return `
       <details class="ftp-profit-preview" data-log-import-debug>
         <summary>Import debug</summary>
+        <small>Version: ${escapeHtml(debug.appVersion || getConfig().version || '')}</small>
+        <small>Required buy IDs: ${escapeHtml((debug.buyLogIds || getBuyLogIds()).join(', '))}</small>
+        <small>Required sell IDs: ${escapeHtml((debug.sellLogIds || getSellLogIds()).join(', '))}</small>
         <small>Strategy: ${escapeHtml(debug.strategyUsed || 'Not requested yet')} / Range: ${escapeHtml(debug.rangeUsed || 'Not requested yet')}</small>
         <small>Endpoint: ${escapeHtml(debug.lastEndpoint || 'Not requested yet')} / Params: ${escapeHtml(params)}</small>
         <small>Raw logs: ${escapeHtml(debug.rawLogsReturned || 0)} / Normalized: ${escapeHtml(debug.normalizedLogs || 0)}</small>
         <small>Recognized buy IDs: ${escapeHtml(debug.buyIdMatches || 0)} / Recognized sell IDs: ${escapeHtml(debug.sellIdMatches || 0)}</small>
-        <small>Pipe buy matches: ${escapeHtml(debug.pipeBuyMatches || 0)} / Pipe sell matches: ${escapeHtml(debug.pipeSellMatches || 0)}</small>
-        <small>Structured buy matches: ${escapeHtml(debug.structuredBuyMatches || 0)} / Structured sell matches: ${escapeHtml(debug.structuredSellMatches || 0)}</small>
-        <small>Text buy matches: ${escapeHtml(debug.textBuyMatches || 0)} / Text sell matches: ${escapeHtml(debug.textSellMatches || 0)}</small>
         <small>Classified buys: ${escapeHtml(debug.classifiedPurchases || 0)} / Classified sells: ${escapeHtml(debug.classifiedSales || 0)}</small>
-        <small>Buy candidates: ${escapeHtml(debug.buyCandidatesCreated || 0)} / Sell candidates: ${escapeHtml(debug.sellCandidatesCreated || 0)}</small>
+        <small>Pipe buy logs found: ${escapeHtml(debug.pipeBuyLogsFound || 0)} / Pipe sell logs found: ${escapeHtml(debug.pipeSellLogsFound || 0)}</small>
+        <small>Parser matches pipe buys ${escapeHtml(debug.pipeBuyMatches || 0)} / pipe sells ${escapeHtml(debug.pipeSellMatches || 0)} / text buys ${escapeHtml(debug.textBuyMatches || 0)} / text sells ${escapeHtml(debug.textSellMatches || 0)}</small>
+        <small>Parser matches structured buys ${escapeHtml(debug.structuredBuyMatches || 0)} / structured sells ${escapeHtml(debug.structuredSellMatches || 0)}</small>
+        <small>Buy candidates total ${escapeHtml(debug.buyCandidatesCreated || 0)} / pipe ${escapeHtml(debug.pipeBuyCandidatesCreated || 0)} / text ${escapeHtml(debug.textBuyCandidatesCreated || 0)} / structured ${escapeHtml(debug.structuredBuyCandidatesCreated || 0)}</small>
+        <small>Sell candidates total ${escapeHtml(debug.sellCandidatesCreated || 0)} / pipe ${escapeHtml(debug.pipeSellCandidatesCreated || 0)} / text ${escapeHtml(debug.textSellCandidatesCreated || 0)} / structured ${escapeHtml(debug.structuredSellCandidatesCreated || 0)}</small>
         <small>Purchases imported: ${escapeHtml(debug.purchasesImported || 0)} / Sales imported: ${escapeHtml(debug.salesImported || 0)}</small>
         <small>Purchases saved: ${escapeHtml(debug.purchasesSaved || 0)} / Sales saved: ${escapeHtml(debug.salesSaved || 0)}</small>
         <small>Duplicates: ${escapeHtml(debug.duplicatesSkipped || 0)} / Ignored: ${escapeHtml(debug.ignoredItems || 0)} / Unmatched: ${escapeHtml(debug.unmatchedSales || 0)}</small>
         <small>Needs review created: ${escapeHtml(debug.reviewCandidatesCreated || 0)} / Active review: ${escapeHtml(debug.activeReviewItems || getReviewQueue(storagePrefix).length || 0)}</small>
         <small>Parser failures: ${escapeHtml(debug.parserFailures || 0)} / Validation failures: ${escapeHtml(debug.validationFailures || 0)}</small>
         <small>Failure reasons: ${escapeHtml(reasons)}</small>
+        ${zeroPurchaseWarning}
+        ${renderParserSelfTest(debug)}
         <small>Timings ms: fetch ${escapeHtml(timings.fetchMs || 0)} / normalize ${escapeHtml(timings.normalizeMs || 0)} / classify ${escapeHtml(timings.classifyMs || 0)} / parse ${escapeHtml(timings.parseMs || 0)} / save ${escapeHtml(timings.storageSaveMs || 0)} / total ${escapeHtml(timings.totalImportMs || 0)}</small>
         <small>Sample raw keys: ${escapeHtml((debug.sampleRawKeys || []).join(', ') || 'None')}</small>
-        ${sampleHtml || '<small>No sanitized sample logs yet.</small>'}
+        ${samples.length ? samples.map(renderRecognizedLog).join('') : '<small>No sanitized sample logs yet.</small>'}
         <small>${escapeHtml(debug.diagnosticMessage || '')}</small>
       </details>
     `;
@@ -253,10 +307,16 @@ const FlipTrackerProBackup = (() => {
       endpoint: debug.lastEndpoint || '',
       selections: debug.lastSelections || '',
       params: debug.lastParams || {},
+      requiredBuyLogIds: debug.buyLogIds || getBuyLogIds(),
+      requiredSellLogIds: debug.sellLogIds || getSellLogIds(),
       rawLogCount: debug.rawLogsReturned || 0,
       normalizedLogCount: debug.normalizedLogs || 0,
       buyIdsDetected: debug.buyIdMatches || 0,
       sellIdsDetected: debug.sellIdMatches || 0,
+      classifiedBuys: debug.classifiedPurchases || 0,
+      classifiedSells: debug.classifiedSales || 0,
+      pipeBuyLogsFound: debug.pipeBuyLogsFound || 0,
+      pipeSellLogsFound: debug.pipeSellLogsFound || 0,
       pipeBuyMatches: debug.pipeBuyMatches || 0,
       pipeSellMatches: debug.pipeSellMatches || 0,
       structuredBuyMatches: debug.structuredBuyMatches || 0,
@@ -265,6 +325,12 @@ const FlipTrackerProBackup = (() => {
       textSellMatches: debug.textSellMatches || 0,
       buyCandidatesCreated: debug.buyCandidatesCreated || 0,
       sellCandidatesCreated: debug.sellCandidatesCreated || 0,
+      pipeBuyCandidatesCreated: debug.pipeBuyCandidatesCreated || 0,
+      textBuyCandidatesCreated: debug.textBuyCandidatesCreated || 0,
+      structuredBuyCandidatesCreated: debug.structuredBuyCandidatesCreated || 0,
+      pipeSellCandidatesCreated: debug.pipeSellCandidatesCreated || 0,
+      textSellCandidatesCreated: debug.textSellCandidatesCreated || 0,
+      structuredSellCandidatesCreated: debug.structuredSellCandidatesCreated || 0,
       purchasesSaved: debug.purchasesSaved || debug.purchasesImported || 0,
       salesSaved: debug.salesSaved || debug.salesImported || 0,
       duplicatesSkipped: debug.duplicatesSkipped || 0,
@@ -275,6 +341,7 @@ const FlipTrackerProBackup = (() => {
       parserFailures: debug.parserFailures || 0,
       validationFailures: debug.validationFailures || 0,
       parserFailureReasons: debug.parserFailureReasons || [],
+      parserSelfTest: debug.parserSelfTest || [],
       timings: debug.timings || {},
       lastErrorCode: debug.lastErrorCode || '',
       lastError: debug.lastError || '',
@@ -282,6 +349,15 @@ const FlipTrackerProBackup = (() => {
       reviewQueue: getReviewQueue(storagePrefix).slice(0, 10),
       diagnosticMessage: debug.diagnosticMessage || ''
     }, null, 2);
+  }
+
+  function persistDebug(storagePrefix, debug) {
+    const storageService = getStorageService();
+    if (!storageService || typeof storageService.update !== 'function') return;
+    storageService.update(storagePrefix, (data) => ({
+      ...data,
+      settings: { ...data.settings, logImportDebug: debug }
+    }));
   }
 
   function bind(root, { eventBus, onImport, storagePrefix } = {}) {
@@ -307,7 +383,9 @@ const FlipTrackerProBackup = (() => {
         return;
       }
       if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(value).then(() => emitNotice('success', 'Copied', `${label} copied.`)).catch(() => emitNotice('warning', 'Copy failed', 'Select and copy the text manually.'));
+        navigator.clipboard.writeText(value)
+          .then(() => emitNotice('success', 'Copied', `${label} copied.`))
+          .catch(() => emitNotice('warning', 'Copy failed', 'Select and copy the text manually.'));
       }
     }
 
@@ -357,12 +435,12 @@ const FlipTrackerProBackup = (() => {
         const debugElement = logImportSection.querySelector('[data-log-import-debug]');
         if (debugElement) debugElement.insertAdjacentHTML('beforebegin', renderImportSummary(summary, storagePrefix));
         else logImportSection.insertAdjacentHTML('beforeend', renderImportSummary(summary, storagePrefix));
-        updateLogImportDebug(summary.debug);
+        updateLogImportDebug(summary.debug || summary);
       }
     }
 
     function getImportMessage(summary) {
-      if (!summary.ok) return (summary.errors || ['Import failed.']).join(' ');
+      if (!summary || !summary.ok) return summary && summary.errors ? summary.errors.join(' ') : 'Import failed.';
       return summary.diagnosticMessage || `Imported ${summary.purchasesImported || 0} purchases and ${summary.salesImported || 0} sales. Skipped ${summary.duplicatesSkipped || 0} duplicates. ${summary.unmatchedSales || 0} unmatched sales. Needs review ${summary.activeReviewItems || summary.reviewCandidatesCreated || 0}.`;
     }
 
@@ -399,6 +477,7 @@ const FlipTrackerProBackup = (() => {
       const ok = result && result.ok;
       const message = result && result.message ? result.message : ok ? 'Review updated.' : 'Could not update review item.';
       updateLogImportStatus(ok ? 'success' : 'error', message);
+      updateLogImportDebug(getLogImportDebug(storagePrefix));
       emitNotice(ok ? 'success' : 'error', title, message);
       if (typeof onImport === 'function') onImport();
     }
@@ -498,8 +577,21 @@ const FlipTrackerProBackup = (() => {
         if (!tornApiService || typeof tornApiService.testRawUserLogs !== 'function') return updateLogImportStatus('error', 'Raw log test is unavailable.');
         updateLogImportStatus('info', 'Testing raw unfiltered user -> log...');
         const result = await tornApiService.testRawUserLogs(storagePrefix);
-        const debug = result.debug || getLogImportDebug(storagePrefix);
-        const message = result.ok ? `Raw test ok. Raw logs ${debug.rawLogsReturned || 0}, normalized ${debug.normalizedLogs || 0}. Buy IDs ${debug.buyIdMatches || 0}, sell IDs ${debug.sellIdMatches || 0}.` : result.error || 'Raw log test failed.';
+        const parserSelfTest = logImportService && typeof logImportService.runParserSelfTest === 'function' ? logImportService.runParserSelfTest() : [];
+        const recognized = logImportService && typeof logImportService.summarizeRecognizedLogs === 'function' ? logImportService.summarizeRecognizedLogs(result.data || []) : [];
+        const debug = {
+          ...(result.debug || getLogImportDebug(storagePrefix)),
+          appVersion: getConfig().version || '',
+          buyLogIds: getBuyLogIds(),
+          sellLogIds: getSellLogIds(),
+          parserSelfTest,
+          firstRecognizedLogs: recognized.length ? recognized : (result.debug && result.debug.firstRecognizedLogs) || (result.debug && result.debug.firstLogs) || []
+        };
+        persistDebug(storagePrefix, debug);
+        const failedTests = parserSelfTest.filter((test) => !test.passed).length;
+        const message = result.ok
+          ? `Raw test ok. Raw logs ${debug.rawLogsReturned || 0}, normalized ${debug.normalizedLogs || 0}. Buy IDs ${debug.buyIdMatches || 0}, sell IDs ${debug.sellIdMatches || 0}. Parser self-test ${parserSelfTest.length - failedTests}/${parserSelfTest.length} passing.`
+          : result.error || 'Raw log test failed.';
         updateLogImportStatus(result.ok ? 'success' : 'error', message, { ok: result.ok, debug, diagnosticMessage: debug.diagnosticMessage || '', errors: result.ok ? [] : [message] });
         emitNotice(result.ok ? 'success' : 'warning', 'Raw log test', message);
       });
