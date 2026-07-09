@@ -2,11 +2,13 @@
 
 A professional standalone Tampermonkey application for Torn flip tracking.
 
-Current version: `0.8.5`
+Current version: `0.8.6-debug`
 
 ## What It Does
 
-Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, Torn log import diagnostics, pipe-format Torn log parsing, readable buy/sell text parsing, parser self-tests, and an actionable import review queue.
+Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, Torn log import diagnostics, readable buy/sell text parsing, parser self-tests, and an actionable import review queue.
+
+Version `0.8.6-debug` is focused on exposing the real Torn API log shape safely. Recognized buy/sell logs now include sanitized previews of `raw.data` and `raw.params` so the parser can be mapped from real data instead of guesses.
 
 The installable release is a single readable userscript with no runtime dependency on GitHub, CDNs, external CSS, frameworks, jQuery, or module imports.
 
@@ -62,7 +64,7 @@ The build script uses only vanilla Node built-ins. No bundlers or npm packages a
 
 Flip Tracker Pro is read-only. It never asks for Torn passwords.
 
-Use a Torn Full Access API key. Flip Tracker Pro stores it locally in your browser only and only sends it to Torn API endpoints. No Torn password is ever required. You can clear the key from Settings at any time.
+Use a Torn Custom API key with only the required selections. Flip Tracker Pro stores it locally in your browser only and only sends it to Torn API endpoints. No Torn password is ever required. You can clear the key from Settings at any time.
 
 ## Log Import IDs
 
@@ -78,23 +80,20 @@ Sell log IDs:
 1226, 1221, 1113, 1104, 4210, 5928, 5511
 ```
 
-Version 0.8.5 classifies logs by Torn log type ID first, then supports API pipe-format rows such as `Item market buy | ... | itemId | quantity | total | unit | ...`, including pipe values buried inside raw/data/params/details. Parseable buys are saved as PurchaseLots even when the item name is not cached yet; those fall back to `Item #id` and are marked for name review.
-
-Readable logs like `You bought 11x CPU on the item market from someone at $325 each for a total of $3,575` and `You sold 54x Dahlia on the item market to Javster at $1,900 each for a total of $97,470 after $5,130 in fees` are also parsed.
-
 ## Log Import Diagnostics
 
 Settings includes:
 
 - Import latest logs, which checks the last 24 hours first and then the last 7 days if no logs are returned.
 - Import date range, with same-day ranges treated as the full day.
-- Raw Log Test, which calls unfiltered `user -> log` with no date or log ID filters and runs parser self-tests.
+- Raw Log Test, which calls unfiltered `user -> log` and collects sanitized recognized log samples.
 - Copy debug report, which excludes the API key.
+- Copy raw recognized logs, which copies only the first 10 recognized buy/sell logs with sanitized `raw.data` and `raw.params` previews.
 - Needs Review, with editable fields and Save as Purchase, Save as Sale, Ignore, and Delete controls.
 - Retry Needs Review Parsing for old review items after parser updates.
 - Reset import state, which clears only imported log IDs, review queue, import history, and import debug.
 
-The debug report includes raw and normalized counts, buy/sell ID matches, classified buys/sells, pipe buy/sell logs found, pipe/text/structured candidate counts, saved counts, duplicate skips, ignored items, unmatched sales, review candidates, parser failures, validation failures, first recognized sanitized logs with pipe parts/raw keys, parser self-test pass/fail, and timing details.
+The debug report never includes the API key. Raw recognized log samples are limited, sanitized, and stored only as small previews rather than full raw log payloads.
 
 ## Release Notes
 
