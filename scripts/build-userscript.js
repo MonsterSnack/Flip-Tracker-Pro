@@ -85,7 +85,9 @@ function readRequired(relativePath) {
 }
 
 function stripUserscriptHeader(source) {
-  return source.replace(/^\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\s*/, '');
+  return source
+    .replace(/^\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\s*/, '')
+    .replace(/0\.7\.5/g, VERSION);
 }
 
 function stripWindowExports(source) {
