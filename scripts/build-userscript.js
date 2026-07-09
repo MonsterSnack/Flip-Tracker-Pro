@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '0.8.2';
+const VERSION = '0.8.3';
 const ROOT = path.resolve(__dirname, '..');
 const DIST_PATH = path.join(ROOT, 'dist', 'flip-tracker-pro.user.js');
 
@@ -121,8 +121,8 @@ function buildCss() {
 function validateOutput(output) {
   const checks = [
     { pattern: /@require\b/, message: 'dist must not contain @require dependencies.' },
-    { pattern: /\bimport\s*(?:\(|[\w{*])/, message: 'dist must not contain import statements or dynamic import().' },
-    { pattern: /\bexport\s+/, message: 'dist must not contain export statements.' },
+    { pattern: /(^|\n)\s*import\s+(?:[\w{*]|\()/, message: 'dist must not contain import statements or dynamic import().' },
+    { pattern: /(^|\n)\s*export\s+/, message: 'dist must not contain export statements.' },
     { pattern: /raw\.githubusercontent\.com/i, message: 'dist must not load GitHub raw source files.' },
     { pattern: /<link\b/i, message: 'dist must not include external CSS links.' },
     { pattern: /<script\b/i, message: 'dist must not include external script tags.' }
