@@ -2,13 +2,13 @@
 
 A professional standalone Tampermonkey application for Torn flip tracking.
 
-Current version: `0.8.6-debug`
+Current version: `0.8.7`
 
 ## What It Does
 
 Flip Tracker Pro adds a floating desktop-style app window on Torn pages. It supports manual purchase tracking, FIFO sale recording, portfolio summaries, statistics, backups, Torn API settings, item price refresh, Torn log import diagnostics, readable buy/sell text parsing, parser self-tests, and an actionable import review queue.
 
-Version `0.8.6-debug` is focused on exposing the real Torn API log shape safely. Recognized buy/sell logs now include sanitized previews of `raw.data` and `raw.params` so the parser can be mapped from real data instead of guesses.
+Version `0.8.7` adds structured Torn buy parsing for the confirmed API shapes. Item market buys now read `raw.data.items[0].id`, `qty`, `cost_each`, and `cost_total`; item abroad buys read `raw.data.item`, `quantity`, `cost_each`, `cost_total`, and `area`. If the item name is not cached yet, the importer saves a safe fallback like `Item #1143` and marks it for name review instead of blocking the import.
 
 The installable release is a single readable userscript with no runtime dependency on GitHub, CDNs, external CSS, frameworks, jQuery, or module imports.
 
@@ -89,6 +89,7 @@ Settings includes:
 - Raw Log Test, which calls unfiltered `user -> log` and collects sanitized recognized log samples.
 - Copy debug report, which excludes the API key.
 - Copy raw recognized logs, which copies only the first 10 recognized buy/sell logs with sanitized `raw.data` and `raw.params` previews.
+- Structured buy parser counts for item market buys, item abroad buys, candidates, saved purchases, and active review items.
 - Needs Review, with editable fields and Save as Purchase, Save as Sale, Ignore, and Delete controls.
 - Retry Needs Review Parsing for old review items after parser updates.
 - Reset import state, which clears only imported log IDs, review queue, import history, and import debug.
