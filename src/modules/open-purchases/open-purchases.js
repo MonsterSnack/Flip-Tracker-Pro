@@ -27,48 +27,114 @@ const FlipTrackerProOpenPurchases = (() => {
     }).format(value || 0);
   }
 
+  function formatPercent(value) {
+    return `${(Number(value) || 0).toFixed(1)}%`;
+  }
+
+  function formatDateTime(value) {
+    const date = new Date(value || '');
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+  }
+
   function normalizePurchaseLot(purchaseLot) {
-    const unitCost = Number(purchaseLot.unitCost ?? purchaseLot.buyPrice) || 0;
+    const unitBuyPrice = Number(purchaseLot.unitBuyPrice ?? purchaseLot.unitCost ?? purchaseLot.buyPrice) || 0;
     const quantity = Number(purchaseLot.quantity) || 1;
+    const remainingQuantity = purchaseLot.remainingQuantity === undefined
+      ? quantity
+      : Math.max(0, Number(purchaseLot.remainingQuantity) || 0);
 
     return {
       ...purchaseLot,
-      buyPrice: unitCost,
+      buyPrice: unitBuyPrice,
       quantity,
-      totalCost: Number(purchaseLot.totalCost) || unitCost * quantity,
-      unitCost
+      remainingQuantity,
+      totalBuyPrice: Number(purchaseLot.totalBuyPrice ?? purchaseLot.totalCost) || unitBuyPrice * quantity,
+      totalCost: Number(purchaseLot.totalBuyPrice ?? purchaseLot.totalCost) || unitBuyPrice * quantity,
+      unitBuyPrice,
+      unitCost: unitBuyPrice
     };
   }
 
-  function calculateSoldFlip(purchaseLot, sellPrice, fees) {
+  function getSnapshotKey(snapshot) {
+    return snapshot.itemId ? `id:${snapshot.itemId}` : `name:${String(snapshot.itemName || '').toLowerCase()}`;
+  }
+
+  function createSnapshotMap(priceSnapshots = []) {
+    return priceSnapshots.reduce((snapshots, snapshot) => {
+      const key = getSnapshotKey(snapshot);
+      const current = snapshots[key];
+      const currentTime = current ? Date.parse(current.timestamp || '') : 0;
+      const nextTime = Date.parse(snapshot.timestamp || '') || 0;
+
+      if (!current || nextTime >= currentTime) {
+        snapshots[key] = snapshot;
+      }
+
+      return snapshots;
+    }, {});
+  }
+
+  function findSnapshot(purchaseLot, snapshotMap) {
+    return snapshotMap[`id:${purchaseLot.itemId}`] || snapshotMap[`name:${String(purchaseLot.itemName || '').toLowerCase()}`] || null;
+  }
+
+  function calculateSoldFlip(purchaseLot, sellPrice, quantity, fees) {
     const normalizedLot = normalizePurchaseLot(purchaseLot);
-    const quantity = Number(normalizedLot.quantity) || 1;
-    const buyPrice = Number(normalizedLot.unitCost) || 0;
-    const totalBuy = buyPrice * quantity;
-    const totalSell = sellPrice * quantity;
+    const soldQuantity = Math.min(parseQuantity(quantity), normalizedLot.remainingQuantity || normalizedLot.quantity || 1);
+    const buyPrice = Number(normalizedLot.unitBuyPrice) || 0;
+    const totalBuy = buyPrice * soldQuantity;
+    const totalSell = sellPrice * soldQuantity;
     const profit = totalSell - totalBuy - fees;
     const margin = totalBuy > 0 ? (profit / totalBuy) * 100 : 0;
 
     return {
-      buyPrice,
-      fees,
+      itemId: normalizedLot.itemId,
       itemName: normalizedLot.itemName || 'Unnamed item',
-      margin,
+      quantity: soldQuantity,
+      unitSellPrice: sellPrice,
+      totalSellPrice: totalSell,
+      matchedBuyCost: totalBuy,
+      grossProfit: totalSell - totalBuy,
+      netProfit: profit,
+      roi: margin,
+      fees,
+      source: 'manual',
       notes: normalizedLot.notes || '',
-      openedAt: normalizedLot.createdAt,
-      profit,
-      quantity,
+      soldAt: new Date().toISOString(),
+      buyPrice,
       sellPrice,
       totalBuy,
-      totalSell
+      totalSell,
+      profit,
+      margin
     };
   }
 
-  function renderPurchase(purchaseLot) {
+  function renderPriceEstimate(normalizedLot, snapshotMap) {
+    const snapshot = findSnapshot(normalizedLot, snapshotMap);
+
+    if (!snapshot) {
+      return '';
+    }
+
+    const currentSellPrice = Number(snapshot.bazaarPrice ?? snapshot.marketPrice) || 0;
+    const openInvestment = normalizedLot.unitBuyPrice * normalizedLot.remainingQuantity;
+    const estimatedProfit = (currentSellPrice * normalizedLot.remainingQuantity) - openInvestment;
+    const estimatedROI = openInvestment > 0 ? (estimatedProfit / openInvestment) * 100 : 0;
+    const updatedAt = formatDateTime(snapshot.timestamp);
+
+    return `
+      <span>Live estimate ${formatMoney(currentSellPrice)} each / P/L <strong data-profit-state="${estimatedProfit >= 0 ? 'positive' : 'negative'}">${formatMoney(estimatedProfit)}</strong> (${formatPercent(estimatedROI)})</span>
+      ${updatedAt ? `<span>Prices updated ${escapeHtml(updatedAt)}</span>` : ''}
+    `;
+  }
+
+  function renderPurchase(purchaseLot, snapshotMap = {}) {
     const normalizedLot = normalizePurchaseLot(purchaseLot);
     const quantity = Number(normalizedLot.quantity) || 1;
-    const unitCost = Number(normalizedLot.unitCost) || 0;
-    const totalCost = Number(normalizedLot.totalCost) || unitCost * quantity;
+    const remainingQuantity = Number(normalizedLot.remainingQuantity) || 0;
+    const unitBuyPrice = Number(normalizedLot.unitBuyPrice) || 0;
+    const openInvestment = unitBuyPrice * remainingQuantity;
     const purchaseId = escapeHtml(normalizedLot.id);
     const itemName = escapeHtml(normalizedLot.itemName || 'Unnamed item');
     const notes = escapeHtml(normalizedLot.notes || '');
@@ -77,12 +143,13 @@ const FlipTrackerProOpenPurchases = (() => {
       <li class="ftp-saved-flip" data-open-purchase-id="${purchaseId}">
         <div class="ftp-saved-flip-main">
           <strong>${itemName}</strong>
-          <span>Buy ${formatMoney(unitCost)} / Qty ${quantity} / Invested ${formatMoney(totalCost)}</span>
+          <span>Buy ${formatMoney(unitBuyPrice)} / Open ${remainingQuantity} of ${quantity} / Invested ${formatMoney(openInvestment)}</span>
+          ${renderPriceEstimate(normalizedLot, snapshotMap)}
           ${notes ? `<span>${notes}</span>` : ''}
         </div>
 
         <div class="ftp-saved-flip-side">
-          <strong>${formatMoney(totalCost)}</strong>
+          <strong>${formatMoney(openInvestment)}</strong>
           <div class="ftp-row-actions">
             <button class="ftp-secondary-button" type="button" data-sell-purchase="${purchaseId}">Mark sold</button>
             <button class="ftp-danger-button" type="button" data-delete-purchase="${purchaseId}">Delete</button>
@@ -97,9 +164,12 @@ const FlipTrackerProOpenPurchases = (() => {
       return '';
     }
 
+    const normalizedLot = normalizePurchaseLot(purchaseLot);
+    const remainingQuantity = Number(normalizedLot.remainingQuantity) || 1;
+
     return `
-      <form class="ftp-form" data-open-purchase-sell-form data-purchase-id="${escapeHtml(purchaseLot.id)}">
-        <h2>Mark Sold: ${escapeHtml(purchaseLot.itemName || 'Unnamed item')}</h2>
+      <form class="ftp-form" data-open-purchase-sell-form data-purchase-id="${escapeHtml(normalizedLot.id)}">
+        <h2>Mark Sold: ${escapeHtml(normalizedLot.itemName || 'Unnamed item')}</h2>
 
         <div class="ftp-form-grid">
           <label class="ftp-field">
@@ -108,15 +178,20 @@ const FlipTrackerProOpenPurchases = (() => {
           </label>
 
           <label class="ftp-field">
-            <span>Fees</span>
-            <input class="ftp-input" name="fees" type="number" min="0" step="1" placeholder="0">
+            <span>Qty</span>
+            <input class="ftp-input" name="quantity" type="number" min="1" max="${remainingQuantity}" step="1" value="${remainingQuantity}" required>
           </label>
         </div>
+
+        <label class="ftp-field">
+          <span>Fees</span>
+          <input class="ftp-input" name="fees" type="number" min="0" step="1" placeholder="0">
+        </label>
 
         <div class="ftp-profit-preview" data-open-sell-preview>
           <span>Estimated profit</span>
           <strong>$0</strong>
-          <small>Margin 0%</small>
+          <small>ROI 0%</small>
         </div>
 
         <div class="ftp-form-actions">
@@ -127,11 +202,12 @@ const FlipTrackerProOpenPurchases = (() => {
     `;
   }
 
-  function render({ purchaseLots, purchases = purchaseLots || [], selectedPurchaseId = '' } = {}) {
-    const lots = purchases.map(normalizePurchaseLot);
+  function render({ purchaseLots, purchases = purchaseLots || [], selectedPurchaseId = '', priceSnapshots = [] } = {}) {
+    const lots = purchases.map(normalizePurchaseLot).filter((purchase) => (Number(purchase.remainingQuantity) || 0) > 0);
+    const snapshotMap = createSnapshotMap(priceSnapshots);
     const selectedPurchase = lots.find((purchase) => purchase.id === selectedPurchaseId) || null;
     const listHtml = lots.length > 0
-      ? `<ul class="ftp-saved-flips">${lots.map(renderPurchase).join('')}</ul>`
+      ? `<ul class="ftp-saved-flips">${lots.map((purchase) => renderPurchase(purchase, snapshotMap)).join('')}</ul>`
       : '<p>No open purchases yet.</p>';
 
     return `
@@ -173,7 +249,7 @@ const FlipTrackerProOpenPurchases = (() => {
     `;
   }
 
-  function bind(root, { onChange, storagePrefix, store } = {}) {
+  function bind(root, { onChange, storagePrefix, store, priceSnapshots = [] } = {}) {
     const section = root.querySelector('[data-open-purchases-section]');
     const purchaseLotService = getPurchaseLotService();
 
@@ -219,9 +295,10 @@ const FlipTrackerProOpenPurchases = (() => {
     function renderSection(selectedPurchaseId = '') {
       section.outerHTML = render({
         purchases: getPurchaseLots(),
+        priceSnapshots,
         selectedPurchaseId
       });
-      bind(root, { onChange, storagePrefix, store });
+      bind(root, { onChange, priceSnapshots, storagePrefix, store });
     }
 
     const addForm = section.querySelector('[data-open-purchase-form]');
@@ -235,12 +312,16 @@ const FlipTrackerProOpenPurchases = (() => {
           return;
         }
 
+        const quantity = parseQuantity(addForm.elements.quantity.value);
+        const unitBuyPrice = parseMoney(addForm.elements.buyPrice.value);
         const purchaseLot = {
           itemName: addForm.elements.itemName.value.trim(),
           notes: addForm.elements.notes.value.trim(),
-          quantity: parseQuantity(addForm.elements.quantity.value),
+          quantity,
+          remainingQuantity: quantity,
           source: 'manual',
-          unitCost: parseMoney(addForm.elements.buyPrice.value)
+          totalBuyPrice: unitBuyPrice * quantity,
+          unitBuyPrice
         };
 
         if (purchaseLotService && typeof purchaseLotService.create === 'function') {
@@ -292,12 +373,13 @@ const FlipTrackerProOpenPurchases = (() => {
         const result = calculateSoldFlip(
           purchase,
           parseMoney(sellForm.elements.sellPrice.value),
+          sellForm.elements.quantity.value,
           parseMoney(sellForm.elements.fees.value)
         );
 
-        previewValue.textContent = formatMoney(result.profit);
-        previewValue.dataset.profitState = result.profit >= 0 ? 'positive' : 'negative';
-        previewMeta.textContent = `Margin ${result.margin.toFixed(1)}%`;
+        previewValue.textContent = formatMoney(result.netProfit);
+        previewValue.dataset.profitState = result.netProfit >= 0 ? 'positive' : 'negative';
+        previewMeta.textContent = `ROI ${result.roi.toFixed(1)}%`;
         return result;
       }
 
@@ -312,8 +394,6 @@ const FlipTrackerProOpenPurchases = (() => {
         if (store && typeof store.add === 'function') {
           store.add(storagePrefix, updatePreview());
         }
-
-        removePurchaseLot(purchase.id);
 
         if (typeof onChange === 'function') {
           onChange();
