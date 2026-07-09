@@ -2,7 +2,7 @@
 
 A professional standalone Tampermonkey application for Torn flip tracking.
 
-Current version: `0.8.1`
+Current version: `0.8.2`
 
 ## What It Does
 
@@ -62,26 +62,23 @@ The build script uses only vanilla Node built-ins. No bundlers or npm packages a
 
 Flip Tracker Pro is read-only. It never asks for Torn passwords.
 
-Your API key is stored locally in your browser only and is used only for official Torn API requests. You can clear the key from Settings at any time.
+Use a Torn Full Access API key for now. Flip Tracker Pro stores it locally in your browser only and only sends it to Torn API endpoints. No Torn password is ever required. You can clear the key from Settings at any time.
 
-Recommended key type: Custom.
+## Log Import IDs
 
-Required selections:
-
-```text
-key -> info
-user -> log
-torn -> items
-market -> itemmarket
-```
-
-Required user log IDs for Custom Key permissions:
+Buy log IDs:
 
 ```text
-1225, 1220, 4201, 1112, 4200, 5927, 5510
+1225, 1220, 4201, 1112, 1103, 4200, 5927, 5510
 ```
 
-These log IDs are key setup requirements. Flip Tracker Pro does not send them as `log=` request filters by default.
+Sell log IDs:
+
+```text
+1226, 1221, 1113, 1104, 4210, 5928, 5511
+```
+
+Version 0.8.2 classifies logs by Torn log type ID first, then falls back to text parsing for known buy/sell wording.
 
 ## Log Import Diagnostics
 
@@ -91,6 +88,8 @@ Settings includes:
 - Import date range, with same-day ranges treated as the full day.
 - Test raw log API, which calls unfiltered `user -> log` with no date or log ID filters.
 - Copy debug report, which excludes the API key.
+
+The debug report now includes raw and normalized counts, buy/sell ID matches, text matches, imported counts, duplicate skips, unmatched sales, first sanitized log samples, and timing details.
 
 ## Release Notes
 
