@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '0.8.5';
+const VERSION = '0.8.6-debug';
 const ROOT = path.resolve(__dirname, '..');
 const DIST_PATH = path.join(ROOT, 'dist', 'flip-tracker-pro.user.js');
 
@@ -34,6 +34,7 @@ const sourceFiles = [
   'src/services/trade-accounting-service.js',
   'src/services/torn-api-service.js',
   'src/services/log-import-service.js',
+  'src/services/log-import-debug-service.js',
   'src/ui/window.js',
   'src/services/purchase-lot-service.js',
   'src/services/portfolio-service.js',
@@ -44,6 +45,7 @@ const sourceFiles = [
   'src/modules/flip-entry/flip-entry.js',
   'src/modules/open-purchases/open-purchases.js',
   'src/modules/backup/backup.js',
+  'src/modules/backup/backup-debug-patch.js',
   'src/modules/saved-flips/saved-flips.js',
   'src/core/app.js'
 ];
@@ -61,6 +63,7 @@ const globalNames = [
   'FlipTrackerProTradeAccountingService',
   'FlipTrackerProTornApiService',
   'FlipTrackerProLogImportService',
+  'FlipTrackerProLogImportDebugService',
   'FlipTrackerProWindow',
   'FlipTrackerProPurchaseLotService',
   'FlipTrackerProPortfolioService',
@@ -71,6 +74,7 @@ const globalNames = [
   'FlipTrackerProFlipEntry',
   'FlipTrackerProOpenPurchases',
   'FlipTrackerProBackup',
+  'FlipTrackerProBackupDebugPatch',
   'FlipTrackerProSavedFlips'
 ];
 
@@ -87,7 +91,8 @@ function readRequired(relativePath) {
 function stripUserscriptHeader(source) {
   return source
     .replace(/^\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\s*/, '')
-    .replace(/0\.7\.5/g, VERSION);
+    .replace(/0\.7\.5/g, VERSION)
+    .replace(/0\.8\.5/g, VERSION);
 }
 
 function stripWindowExports(source) {
@@ -175,6 +180,7 @@ ${source}
         storage: FlipTrackerProStorageService,
         tornApi: FlipTrackerProTornApiService,
         logImport: FlipTrackerProLogImportService,
+        logImportDebug: FlipTrackerProLogImportDebugService,
         tradeAccounting: FlipTrackerProTradeAccountingService
       }),
       runParserSelfTest: FlipTrackerProLogImportService.runParserSelfTest
