@@ -38,7 +38,7 @@ const FlipTrackerProStorageService = (() => {
   }
 
   function toNumber(value, fallback = 0) {
-    const numberValue = Number(value);
+    const numberValue = Number(String(value ?? '').replace(/[$,]/g, ''));
     return Number.isFinite(numberValue) ? numberValue : fallback;
   }
 
@@ -85,6 +85,7 @@ const FlipTrackerProStorageService = (() => {
       source: normalizeSource(sale.source),
       notes: String(sale.notes || ''),
       originalLogId: sale.originalLogId ? String(sale.originalLogId) : undefined,
+      logTypeId: sale.logTypeId === undefined || sale.logTypeId === '' ? undefined : Number(sale.logTypeId),
       unmatchedSale: Boolean(sale.unmatchedSale),
       importWarning: sale.importWarning ? String(sale.importWarning) : '',
       matchedQuantity: Math.max(0, toNumber(sale.matchedQuantity, quantity - toNumber(sale.unmatchedQuantity))),
@@ -124,9 +125,30 @@ const FlipTrackerProStorageService = (() => {
       notes: String(lot.notes || ''),
       source: normalizeSource(lot.source),
       originalLogId: lot.originalLogId ? String(lot.originalLogId) : undefined,
+      logTypeId: lot.logTypeId === undefined || lot.logTypeId === '' ? undefined : Number(lot.logTypeId),
       buyPrice: unitBuyPrice,
       unitCost: unitBuyPrice,
       totalCost: totalBuyPrice
+    };
+  }
+
+  function normalizeImportReviewItem(rawItem) {
+    const item = rawItem && typeof rawItem === 'object' ? rawItem : {};
+    const entryId = String(item.entryId || item.originalLogId || item.id || createId());
+
+    return {
+      id: item.id || `review-${entryId}`,
+      entryId,
+      originalLogId: entryId,
+      logTypeId: item.logTypeId === undefined || item.logTypeId === '' ? undefined : Number(item.logTypeId),
+      timestamp: item.timestamp || item.createdAt || new Date().toISOString(),
+      type: item.type === 'sell' ? 'sell' : 'buy',
+      textPreview: String(item.textPreview || item.message || item.text || '').slice(0, 320),
+      rawKeys: Array.isArray(item.rawKeys) ? item.rawKeys.map(String).slice(0, 40) : [],
+      rawSampleKeys: Array.isArray(item.rawSampleKeys) ? item.rawSampleKeys.map(String).slice(0, 40) : [],
+      reason: String(item.reason || 'Parser could not create a valid import candidate.'),
+      source: 'api',
+      createdAt: item.createdAt || new Date().toISOString()
     };
   }
 
@@ -158,6 +180,9 @@ const FlipTrackerProStorageService = (() => {
       logsReturned: Math.max(0, toNumber(entry.logsReturned)),
       classifiedPurchases: Math.max(0, toNumber(entry.classifiedPurchases)),
       classifiedSales: Math.max(0, toNumber(entry.classifiedSales)),
+      reviewCandidatesCreated: Math.max(0, toNumber(entry.reviewCandidatesCreated)),
+      parserFailures: Math.max(0, toNumber(entry.parserFailures)),
+      validationFailures: Math.max(0, toNumber(entry.validationFailures)),
       warnings: Array.isArray(entry.warnings) ? entry.warnings.map(String).slice(0, 20) : [],
       errors: Array.isArray(entry.errors) ? entry.errors.map(String).slice(0, 20) : []
     };
@@ -195,6 +220,7 @@ const FlipTrackerProStorageService = (() => {
       sales: [],
       itemPriceSnapshots: [],
       importedLogIds: [],
+      importReviewQueue: [],
       importHistory: [],
       backups: []
     };
@@ -214,6 +240,7 @@ const FlipTrackerProStorageService = (() => {
       sales: Array.isArray(nextData.sales) ? nextData.sales.map(normalizeSale) : [],
       itemPriceSnapshots: Array.isArray(nextData.itemPriceSnapshots) ? nextData.itemPriceSnapshots.map(normalizeItemPriceSnapshot) : [],
       importedLogIds: Array.isArray(nextData.importedLogIds) ? [...new Set(nextData.importedLogIds.map(String))] : [],
+      importReviewQueue: Array.isArray(nextData.importReviewQueue) ? nextData.importReviewQueue.map(normalizeImportReviewItem).slice(0, 100) : [],
       importHistory: Array.isArray(nextData.importHistory) ? nextData.importHistory.map(normalizeImportHistoryEntry).slice(0, 30) : [],
       backups: Array.isArray(nextData.backups) ? nextData.backups : []
     };
@@ -227,7 +254,8 @@ const FlipTrackerProStorageService = (() => {
     return normalizeData({
       windowState: windowState && typeof windowState === 'object' ? windowState : {},
       purchaseLots: Array.isArray(openPurchases) ? openPurchases.map(normalizePurchaseLot) : [],
-      sales: Array.isArray(flips) ? flips.map(normalizeSale) : []
+      sales: Array.isArray(flips) ? flips.map(normalizeSale) : [],
+      importReviewQueue: []
     });
   }
 
@@ -266,7 +294,7 @@ const FlipTrackerProStorageService = (() => {
       return { ok: false, message: 'Backup data must be an object.' };
     }
 
-    const fields = ['settings', 'windowState', 'purchaseLots', 'sales', 'itemPriceSnapshots', 'importedLogIds', 'importHistory', 'backups'];
+    const fields = ['settings', 'windowState', 'purchaseLots', 'sales', 'itemPriceSnapshots', 'importedLogIds', 'importReviewQueue', 'importHistory', 'backups'];
     const hasKnownField = fields.some((field) => Object.prototype.hasOwnProperty.call(data, field));
 
     if (!hasKnownField && !Array.isArray(data.flips)) {
@@ -287,6 +315,10 @@ const FlipTrackerProStorageService = (() => {
 
     if (data.importedLogIds && !Array.isArray(data.importedLogIds)) {
       return { ok: false, message: 'Imported log IDs must be a list.' };
+    }
+
+    if (data.importReviewQueue && !Array.isArray(data.importReviewQueue)) {
+      return { ok: false, message: 'Import review queue must be a list.' };
     }
 
     return { ok: true, message: '' };
@@ -310,7 +342,8 @@ const FlipTrackerProStorageService = (() => {
     const importedData = Array.isArray(parsedData.flips)
       ? normalizeData({
         purchaseLots: Array.isArray(parsedData.openPurchases) ? parsedData.openPurchases : [],
-        sales: parsedData.flips
+        sales: parsedData.flips,
+        importReviewQueue: Array.isArray(parsedData.importReviewQueue) ? parsedData.importReviewQueue : []
       })
       : normalizeData(parsedData);
 
@@ -325,6 +358,7 @@ const FlipTrackerProStorageService = (() => {
     importJson,
     load,
     normalizeImportHistoryEntry,
+    normalizeImportReviewItem,
     normalizeItemPriceSnapshot,
     normalizePurchaseLot,
     normalizeSale,
